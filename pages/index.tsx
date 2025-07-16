@@ -1,38 +1,60 @@
-// pages/api/generate-question.ts
-import OpenAI from 'openai';
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { useState } from 'react';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export default function Home() {
+  const [qaList, setQaList] = useState([
+    { q: '最近取り組んでいることの中で、特に達成感を感じたエピソードはありますか？', a: '' }
+  ]);
+  const [loading, setLoading] = useState(false);
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const last = qaList[qaList.length - 1];
+    if (!last.a.trim()) return;
 
-  const { history } = req.body;
-  const messages = history.map((item: { q: string; a: string }) => ({
-    role: 'user',
-    content: `Q: ${item.q}\nA: ${item.a}`,
-  }));
+    setLoading(true);
 
-  messages.push({
-    role: 'system',
-    content:
-      '次の質問を1つだけ考えてください。相手の回答内容を踏まえて、GRIT（情熱と粘り強さ）を見抜くために有効な質問を、できるだけ自然な対話として作成してください。',
-  });
-
-  try {
-    const chat = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages,
+    const res = await fetch('/api/generate-question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ history: qaList })
     });
 
-    const nextQuestion = chat.choices[0].message.content?.trim() || 'ありがとうございます。以上です。';
-    res.status(200).json({ question: nextQuestion });
-  } catch (err: any) {
-    console.error('OpenAI API error:', err);
-    res.status(500).json({ error: 'Failed to generate question' });
-  }
+    const data = await res.json();
+    const nextQ = data.question;
+
+    setQaList([...qaList, { q: nextQ, a: '' }]);
+    setLoading(false);
+  };
+
+  const handleChange = (idx: number, value: string) => {
+    const newList = [...qaList];
+    newList[idx].a = value;
+    setQaList(newList);
+  };
+
+  return (
+    <main style={{ padding: '2rem', maxWidth: '600px', margin: '0 auto' }}>
+      <h2>GRIT測定インタビュー</h2>
+      {qaList.map((item, idx) => (
+        <div key={idx} style={{ marginBottom: '1.5rem' }}>
+          <div><strong>Q{idx + 1}:</strong> {item.q}</div>
+          <input
+            type="text"
+            value={item.a}
+            onChange={(e) => handleChange(idx, e.target.value)}
+            disabled={idx !== qaList.length - 1 || loading}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              marginTop: '0.5rem',
+              backgroundColor: idx !== qaList.length - 1 ? '#eee' : 'white'
+            }}
+          />
+        </div>
+      ))}
+      <button onClick={handleSubmit} disabled={loading} style={{ padding: '0.5rem 1rem' }}>
+        {loading ? 'AIが次の質問を考えています...' : '次の質問へ'}
+      </button>
+    </main>
+  );
 }
