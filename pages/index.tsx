@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 
 export default function Home() {
-  const [questions, setQuestions] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<string[]>([
+    'これまでに何かをやり遂げた経験を教えてください。',
+  ]);
   const [answers, setAnswers] = useState<string[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -10,7 +12,7 @@ export default function Home() {
     const messages = [
       {
         role: 'system',
-        content: 'あなたはGRITインタビュアーです。回答に基づいて次の質問を1つ出してください。',
+        content: 'あなたはGRITインタビュアーです。前の回答に基づいて、次の深掘り質問を1つだけ日本語で出してください。',
       },
     ];
 
@@ -28,19 +30,16 @@ export default function Home() {
     return data.result;
   };
 
-  useEffect(() => {
-    (async () => {
-      const firstQuestion = await callApi([]);
-      setQuestions([firstQuestion]);
-    })();
-  }, []);
-
   const handleNext = async () => {
     const newAnswers = [...answers, currentAnswer];
-    const nextQuestion = await callApi(newAnswers);
+
+    let nextQuestion = '';
+    if (currentQuestionIndex >= 0) {
+      nextQuestion = await callApi(newAnswers);
+    }
 
     setAnswers(newAnswers);
-    setQuestions([...questions, nextQuestion]);
+    if (nextQuestion) setQuestions([...questions, nextQuestion]);
     setCurrentAnswer('');
     setCurrentQuestionIndex(currentQuestionIndex + 1);
   };
