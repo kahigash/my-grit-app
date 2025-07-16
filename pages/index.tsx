@@ -6,16 +6,15 @@ export default function Home() {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
-  // 初期質問の取得
   useEffect(() => {
     const fetchInitialQuestion = async () => {
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [] }), // Chat API 形式に合わせて空配列
+        body: JSON.stringify({ messages: [] }),
       });
       const data = await res.json();
-      setQuestions([data.question]);
+      setQuestions([data.result]); // ← 修正点
     };
     fetchInitialQuestion();
   }, []);
@@ -23,7 +22,6 @@ export default function Home() {
   const handleNext = async () => {
     const newAnswers = [...answers, currentAnswer];
 
-    // messages配列の構築（Chat API形式）
     const messages = questions.map((question, index) => {
       return [
         { role: 'system', content: question },
@@ -38,7 +36,7 @@ export default function Home() {
     });
 
     const data = await res.json();
-    setQuestions([...questions, data.question]);
+    setQuestions([...questions, data.result]); // ← 修正点
     setAnswers(newAnswers);
     setCurrentAnswer('');
     setCurrentQuestionIndex(currentQuestionIndex + 1);
