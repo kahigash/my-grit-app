@@ -6,28 +6,17 @@ export default function Home() {
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
-  useEffect(() => {
-    const fetchInitialQuestion = async () => {
-      const res = await fetch('/api/generate-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [] }),
-      });
-      const data = await res.json();
-      setQuestions([data.result]); // ← 修正点
-    };
-    fetchInitialQuestion();
-  }, []);
+  const callApi = async (answers: string[]) => {
+    const messages = [
+      {
+        role: 'system',
+        content: 'あなたはGRITインタビュアーです。回答に基づいて次の質問を1つ出してください。',
+      },
+    ];
 
-  const handleNext = async () => {
-    const newAnswers = [...answers, currentAnswer];
-
-    const messages = questions.map((question, index) => {
-      return [
-        { role: 'system', content: question },
-        { role: 'user', content: newAnswers[index] || '' }
-      ];
-    }).flat();
+    answers.forEach((answer, i) => {
+      messages.push({ role: 'user', content: `Q${i + 1}への回答: ${answer}` });
+    });
 
     const res = await fetch('/api/generate-question', {
       method: 'POST',
@@ -36,8 +25,22 @@ export default function Home() {
     });
 
     const data = await res.json();
-    setQuestions([...questions, data.result]); // ← 修正点
+    return data.result;
+  };
+
+  useEffect(() => {
+    (async () => {
+      const firstQuestion = await callApi([]);
+      setQuestions([firstQuestion]);
+    })();
+  }, []);
+
+  const handleNext = async () => {
+    const newAnswers = [...answers, currentAnswer];
+    const nextQuestion = await callApi(newAnswers);
+
     setAnswers(newAnswers);
+    setQuestions([...questions, nextQuestion]);
     setCurrentAnswer('');
     setCurrentQuestionIndex(currentQuestionIndex + 1);
   };
@@ -58,7 +61,9 @@ export default function Home() {
           )}
         </div>
       ))}
-      <button onClick={handleNext}>次の質問へ</button>
+      <button onClick={handleNext} disabled={!currentAnswer.trim()}>
+        次の質問へ
+      </button>
     </div>
   );
 }
