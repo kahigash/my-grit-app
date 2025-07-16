@@ -1,1 +1,2 @@
-# my-grit-app
+# GRIT測定モックアプリ
+Vercelデプロイ用のReactアプリです。
