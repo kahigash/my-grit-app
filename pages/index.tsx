@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react';
 
 export default function Home() {
   const [questions, setQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
 
-  // 最初の質問を取得する
+  // 初期質問の取得
   useEffect(() => {
     const fetchInitialQuestion = async () => {
       const res = await fetch('/api/generate-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ previousAnswers: [] }),
+        body: JSON.stringify({ messages: [] }), // Chat API 形式に合わせて空配列
       });
       const data = await res.json();
       setQuestions([data.question]);
@@ -20,14 +21,25 @@ export default function Home() {
   }, []);
 
   const handleNext = async () => {
-    const newAnswers = [...questions.map((_, i) => i === currentQuestionIndex ? currentAnswer : '')];
+    const newAnswers = [...answers, currentAnswer];
+
+    // messages配列の構築（Chat API形式）
+    const messages = questions.map((question, index) => {
+      return [
+        { role: 'system', content: question },
+        { role: 'user', content: newAnswers[index] || '' }
+      ];
+    }).flat();
+
     const res = await fetch('/api/generate-question', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ previousAnswers: newAnswers }),
+      body: JSON.stringify({ messages }),
     });
+
     const data = await res.json();
     setQuestions([...questions, data.question]);
+    setAnswers(newAnswers);
     setCurrentAnswer('');
     setCurrentQuestionIndex(currentQuestionIndex + 1);
   };
