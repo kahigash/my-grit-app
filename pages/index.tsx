@@ -9,9 +9,10 @@ export default function Home() {
   const [showResult, setShowResult] = useState(false);
   const [resultText, setResultText] = useState('');
 
-  useEffect(() => {
-    setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
-  }, []);
+useEffect(() => {
+  setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
+  setAnswers(['']);
+}, []);
 
   const handleNext = async () => {
     if (showResult || questions.length >= 5) return;
