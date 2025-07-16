@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 
 export default function Home() {
   const [questions, setQuestions] = useState<string[]>([]);
+  const [answers, setAnswers] = useState<string[]>([]);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [resultText, setResultText] = useState('');
 
-useEffect(() => {
-  setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
-  setAnswers(['']);
-}, []);
+  useEffect(() => {
+    setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
+    setAnswers(['']);
+  }, []);
 
   const handleNext = async () => {
     if (showResult || questions.length >= 5) return;
@@ -21,7 +21,8 @@ useEffect(() => {
     updatedAnswers[currentQuestionIndex] = currentAnswer;
     setAnswers(updatedAnswers);
 
-    if (questions.length >= 5 - 1) {
+    // 5問目なら診断へ
+    if (questions.length >= 4) {
       setShowResult(true);
       try {
         const res = await fetch('/api/generate-result', {
@@ -37,11 +38,12 @@ useEffect(() => {
       return;
     }
 
+    // ここで messages を厳密に構成
     const messages = [
       { role: 'system', content: 'あなたはGRITを測定するためのインタビュアーです。' },
-      ...updatedAnswers.map((answer, index) => ({
+      ...questions.map((q, i) => ({
         role: 'user',
-        content: `Q${index + 1}: ${questions[index]}\nA: ${answer}`,
+        content: `Q${i + 1}: ${q}\nA: ${updatedAnswers[i] ?? ''}`,
       })),
       { role: 'user', content: '次の質問をお願いします。' },
     ];
@@ -55,6 +57,7 @@ useEffect(() => {
       const data = await res.json();
       if (data.result) {
         setQuestions([...questions, data.result]);
+        setAnswers([...updatedAnswers, '']);
         setCurrentQuestionIndex(currentQuestionIndex + 1);
         setCurrentAnswer('');
         setError(null);
