@@ -5,7 +5,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-const MODEL_NAME = process.env.MODEL_NAME || 'gpt-4o';
+const MODEL_NAME = process.env.MODEL_NAME || 'gpt-3.5-turbo';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
