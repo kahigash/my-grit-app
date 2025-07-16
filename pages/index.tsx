@@ -10,25 +10,29 @@ export default function Home() {
   const [resultText, setResultText] = useState('');
 
   useEffect(() => {
-    setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
+    const firstQuestion = 'あなたが最近やり抜いた経験について教えてください。';
+    setQuestions([firstQuestion]);
     setAnswers(['']);
   }, []);
 
   const handleNext = async () => {
-    if (showResult || questions.length >= 5) return;
+    if (showResult || currentQuestionIndex >= 5) return;
 
     const updatedAnswers = [...answers];
     updatedAnswers[currentQuestionIndex] = currentAnswer;
     setAnswers(updatedAnswers);
 
-    // 回答数が5に達したら診断生成
-    if (questions.length >= 4) {
+    // 5問目回答後 → 結果生成
+    if (currentQuestionIndex === 4) {
       setShowResult(true);
       try {
         const res = await fetch('/api/generate-result', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ questions, answers: updatedAnswers }),
+          body: JSON.stringify({
+            questions,
+            answers: updatedAnswers,
+          }),
         });
         const data = await res.json();
         setResultText(data.result || '診断結果を取得できませんでした。');
@@ -38,16 +42,20 @@ export default function Home() {
       return;
     }
 
-    // answersを質問数と一致させる
-    while (updatedAnswers.length < questions.length) {
-      updatedAnswers.push('');
+    // 必ず質問数と回答数が一致するよう調整
+    const paddedAnswers = [...updatedAnswers];
+    while (paddedAnswers.length < questions.length) {
+      paddedAnswers.push('');
     }
 
     const messages = [
-      { role: 'system', content: 'あなたはGRITを測定するためのインタビュアーです。' },
+      {
+        role: 'system',
+        content: 'あなたはGRITを測定するためのインタビュアーです。',
+      },
       ...questions.map((q, i) => ({
         role: 'user',
-        content: `Q${i + 1}: ${q}\nA: ${updatedAnswers[i] ?? ''}`,
+        content: `Q${i + 1}: ${q}\nA: ${paddedAnswers[i] || ''}`,
       })),
       { role: 'user', content: '次の質問をお願いします。' },
     ];
@@ -61,9 +69,9 @@ export default function Home() {
       const data = await res.json();
       if (data.result) {
         setQuestions([...questions, data.result]);
-        setAnswers([...updatedAnswers, '']);
-        setCurrentQuestionIndex(currentQuestionIndex + 1);
+        setAnswers([...paddedAnswers, '']);
         setCurrentAnswer('');
+        setCurrentQuestionIndex(currentQuestionIndex + 1);
         setError(null);
       } else {
         setError('次の質問を取得できませんでした。');
