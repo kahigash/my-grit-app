@@ -1,57 +1,66 @@
-// pages/index.tsx
-
 import { useState } from 'react';
 
 export default function Home() {
-  const [qaList, setQaList] = useState([
-    { q: '最近熱中していることや、継続して取り組んでいる趣味はありますか？', a: '' }
+  const [messages, setMessages] = useState([
+    {
+      role: 'system',
+      content: 'あなたは親しみやすいコーチとして、GRIT（やり抜く力）を測るための質問を1つずつ出してください。質問は自由回答形式にしてください。',
+    },
   ]);
+  const [currentQuestion, setCurrentQuestion] = useState('');
+  const [userInput, setUserInput] = useState('');
+  const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const last = qaList[qaList.length - 1];
-    if (!last.a.trim()) return;
-
+  const fetchNextQuestion = async () => {
     setLoading(true);
+    const updatedMessages = [
+      ...messages,
+      { role: 'user', content: userInput },
+    ];
 
-    const res = await fetch('/api/generate-question', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history: qaList })
-    });
+    try {
+      const response = await fetch('/api/generate-question', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: updatedMessages }),
+      });
 
-    const data = await res.json();
-    const nextQ = data.question;
+      const data = await response.json();
+      const newMessage = { role: 'assistant', content: data.message };
 
-    setQaList([...qaList, { q: nextQ, a: '' }]);
-    setLoading(false);
-  };
-
-  const handleChange = (idx: number, value: string) => {
-    const newList = [...qaList];
-    newList[idx].a = value;
-    setQaList(newList);
+      setMessages([...updatedMessages, newMessage]);
+      setCurrentQuestion(data.message);
+      setQuestionCount((prev) => prev + 1);
+      setUserInput('');
+    } catch (error) {
+      console.error('質問取得エラー:', error);
+      setCurrentQuestion('エラーが発生しました。もう一度お試しください。');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <main style={{ padding: '2rem' }}>
-      <h2>GRIT測定インタビュー</h2>
-      {qaList.map((item, idx) => (
-        <div key={idx} style={{ marginBottom: '1.5rem' }}>
-          <div><strong>Q{idx + 1}:</strong> {item.q}</div>
-          <input
-            type="text"
-            value={item.a}
-            onChange={(e) => handleChange(idx, e.target.value)}
-            disabled={idx !== qaList.length - 1}
-            style={{ width: '100%', padding: '0.5rem', marginTop: '0.5rem' }}
-          />
-        </div>
-      ))}
-      <button onClick={handleSubmit} disabled={loading}>
-        {loading ? '次の質問を生成中...' : '次の質問へ'}
+    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+      <h1>GRIT測定インタビュー</h1>
+      <p><strong>Q{questionCount + 1}:</strong> {currentQuestion || '最初の質問を始めてください。'}</p>
+      <input
+        type="text"
+        value={userInput}
+        onChange={(e) => setUserInput(e.target.value)}
+        disabled={loading}
+        style={{ width: '100%', padding: '0.5rem', marginTop: '0.5rem' }}
+      />
+      <button
+        onClick={fetchNextQuestion}
+        disabled={loading || !userInput.trim()}
+        style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}
+      >
+        {loading ? '読み込み中...' : '次の質問へ'}
       </button>
-    </main>
+    </div>
   );
 }
