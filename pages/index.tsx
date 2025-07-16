@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -12,7 +12,34 @@ export default function Home() {
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // ✅ 最初の質問を1回だけ取得
+  useEffect(() => {
+    const getFirstQuestion = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/generate-question', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messages }),
+        });
+        const data = await response.json();
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
+        setCurrentQuestion(data.message);
+      } catch (error) {
+        setCurrentQuestion('最初の質問を取得できませんでした。');
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    getFirstQuestion();
+  }, []);
+
   const fetchNextQuestion = async () => {
+    if (!userInput.trim()) return;
+
     setLoading(true);
     const updatedMessages = [
       ...messages,
@@ -46,7 +73,7 @@ export default function Home() {
   return (
     <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
       <h1>GRIT測定インタビュー</h1>
-      <p><strong>Q{questionCount + 1}:</strong> {currentQuestion || '最初の質問を始めてください。'}</p>
+      <p><strong>Q{questionCount + 1}:</strong> {currentQuestion}</p>
       <input
         type="text"
         value={userInput}
