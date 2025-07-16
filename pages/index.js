@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 export default function Home() {
   const [qaList, setQaList] = useState([
-    { q: '最近ハマっていることや、続けている趣味はありますか？', a: '' }
+    { q: '最近、自分の中で“続けていること”って何かありますか？', a: '' }
   ]);
   const [loading, setLoading] = useState(false);
 
@@ -50,6 +50,12 @@ export default function Home() {
       <button onClick={handleSubmit} disabled={loading}>
         {loading ? '次の質問を生成中...' : '次の質問へ'}
       </button>
+
+      {loading && (
+        <div style={{ marginTop: '1rem', fontStyle: 'italic', color: '#555' }}>
+          🤖 AIが質問を考えています…
+        </div>
+      )}
     </main>
   );
 }
