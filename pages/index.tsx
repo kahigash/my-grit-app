@@ -14,11 +14,13 @@ export default function Home() {
   }, []);
 
   const handleNext = async () => {
+    if (showResult || questions.length >= 5) return;
+
     const updatedAnswers = [...answers];
     updatedAnswers[currentQuestionIndex] = currentAnswer;
     setAnswers(updatedAnswers);
 
-    if (questions.length >= 5) {
+    if (questions.length >= 5 - 1) {
       setShowResult(true);
       try {
         const res = await fetch('/api/generate-result', {
