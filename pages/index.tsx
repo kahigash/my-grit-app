@@ -6,6 +6,7 @@ export default function Home() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // 最初の質問を固定
   useEffect(() => {
     setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
   }, []);
@@ -36,7 +37,7 @@ export default function Home() {
       } else {
         setError('次の質問を取得できませんでした。');
       }
-    } catch {
+    } catch (err) {
       setError('質問の取得に失敗しました。');
     }
   };
