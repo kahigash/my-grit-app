@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
+type Role = 'user' | 'assistant';
+
 interface Message {
-  role: 'user' | 'assistant';
+  role: Role;
   content: string;
 }
 
@@ -13,9 +15,6 @@ export default function Home() {
   const [error, setError] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Q番号表示用（assistantの数 = 質問数）
-  const questionNumber = messages.filter((m) => m.role === 'assistant').length + 1;
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -24,12 +23,15 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
-  // 初回のみQ1の質問取得
   useEffect(() => {
     const loadInitialQuestion = async () => {
       try {
         const res = await axios.post('/api/generate-question', { messages: [] });
-        setMessages([{ role: 'assistant', content: res.data.result }]);
+        const initialMessage: Message = {
+          role: 'assistant',
+          content: res.data.result,
+        };
+        setMessages([initialMessage]);
       } catch (err) {
         setError('初回の質問取得に失敗しました。');
       }
@@ -40,7 +42,8 @@ export default function Home() {
   const handleSubmit = async () => {
     if (!input.trim()) return;
 
-    const updatedMessages = [...messages, { role: 'user', content: input }];
+    const userMessage: Message = { role: 'user', content: input };
+    const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
     setLoading(true);
@@ -48,11 +51,15 @@ export default function Home() {
 
     try {
       const res = await axios.post('/api/generate-question', {
-        messages: [...updatedMessages],
+        messages: updatedMessages,
       });
 
       if (res.data.result) {
-        setMessages([...updatedMessages, { role: 'assistant', content: res.data.result }]);
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: res.data.result,
+        };
+        setMessages([...updatedMessages, assistantMessage]);
       } else {
         setError('質問の取得に失敗しました。');
       }
@@ -85,7 +92,7 @@ export default function Home() {
 
       {error && <div style={{ color: 'red' }}>{error}</div>}
 
-      {!loading && questionNumber <= 5 && (
+      {!loading && messages.filter((m) => m.role === 'assistant').length < 5 && (
         <div>
           <textarea
             value={input}
