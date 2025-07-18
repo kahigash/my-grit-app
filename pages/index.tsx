@@ -100,14 +100,11 @@ export default function Home() {
 
       const newMessages = [...updatedMessages];
       const validQuestions = newMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-
       const validAnswers = newMessages.filter((m, i) => {
         if (m.role !== 'user') return false;
-        const prev = newMessages[i - 1];
-        const prevIsRetryPrompt = prev?.role === 'assistant' && prev?.isRetryPrompt;
-        const twoBefore = newMessages[i - 2];
-        const twoBeforeIsRetryPrompt = twoBefore?.role === 'assistant' && twoBefore?.isRetryPrompt;
-        return !prevIsRetryPrompt && !twoBeforeIsRetryPrompt;
+        if (newMessages[i - 1]?.isRetryPrompt) return false;
+        if (newMessages[i - 2]?.isRetryPrompt) return false;
+        return true;
       });
 
       if (validQuestions.length >= 5 && validAnswers.length >= 5) {
@@ -146,11 +143,9 @@ export default function Home() {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
     const realAnswers = messages.filter((m, i) => {
       if (m.role !== 'user') return false;
-      const prev = messages[i - 1];
-      const prevIsRetryPrompt = prev?.role === 'assistant' && prev?.isRetryPrompt;
-      const twoBefore = messages[i - 2];
-      const twoBeforeIsRetryPrompt = twoBefore?.role === 'assistant' && twoBefore?.isRetryPrompt;
-      return !prevIsRetryPrompt && !twoBeforeIsRetryPrompt;
+      if (messages[i - 1]?.isRetryPrompt) return false;
+      if (messages[i - 2]?.isRetryPrompt) return false;
+      return true;
     });
     if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
