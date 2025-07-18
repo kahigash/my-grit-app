@@ -20,9 +20,17 @@ interface GritScore {
 
 interface ScoreChange {
   delta: Partial<GritScore>;
-  relatedFactors: string[]; // 例: ["perseverance", "passion"]
+  relatedFactors: string[];
   userAnswer: string;
 }
+
+// 英語→日本語マッピング
+const labelMap: Record<keyof GritScore, string> = {
+  perseverance: '粘り強さ',
+  passion: '情熱',
+  goal_orientation: '目標志向性',
+  resilience: '回復力',
+};
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -74,7 +82,6 @@ export default function Home() {
     setError('');
 
     try {
-      // 質問生成
       const res = await axios.post('/api/generate-question', {
         messages: updatedMessages,
       });
@@ -86,7 +93,6 @@ export default function Home() {
       const newMessages = [...updatedMessages, assistantMessage];
       setMessages(newMessages);
 
-      // GRITスコア評価
       const scoreRes = await axios.post('/api/evaluate-grit', {
         messages: newMessages,
       });
@@ -115,6 +121,10 @@ export default function Home() {
     }
   };
 
+  const assistantCount = messages.filter((m) => m.role === 'assistant').length;
+  const userCount = messages.filter((m) => m.role === 'user').length;
+  const showInput = assistantCount < 6 && assistantCount > userCount;
+
   return (
     <>
       <Head>
@@ -122,7 +132,7 @@ export default function Home() {
       </Head>
 
       <div style={{ display: 'flex', padding: '2rem', gap: '2rem' }}>
-        {/* 左カラム（2/3） */}
+        {/* 左2/3 */}
         <div style={{ flex: 2 }}>
           <h1>GRIT測定インタビュー</h1>
 
@@ -132,9 +142,7 @@ export default function Home() {
             const previousQuestions = messages
               .slice(0, idx)
               .filter(
-                (m) =>
-                  m.role === 'assistant' &&
-                  !m.content.includes('以上で質問は終了')
+                (m) => m.role === 'assistant' && !m.content.includes('以上で質問は終了')
               ).length;
 
             return (
@@ -155,23 +163,21 @@ export default function Home() {
 
           {error && <div style={{ color: 'red' }}>{error}</div>}
 
-          {!loading &&
-            messages.filter((m) => m.role === 'assistant').length >
-              messages.filter((m) => m.role === 'user').length && (
-              <div>
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="ここに回答を入力してください"
-                  rows={3}
-                  style={{ width: '100%', marginBottom: '1rem' }}
-                />
-                <button onClick={handleSubmit}>送信</button>
-              </div>
-            )}
+          {showInput && (
+            <div>
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="ここに回答を入力してください"
+                rows={3}
+                style={{ width: '100%', marginBottom: '1rem' }}
+              />
+              <button onClick={handleSubmit}>送信</button>
+            </div>
+          )}
         </div>
 
-        {/* 右カラム（1/3） */}
+        {/* 右1/3 */}
         <div
           style={{
             flex: 1,
@@ -186,10 +192,11 @@ export default function Home() {
         >
           <strong>現在のGRITスコア</strong>
           <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
-            <li>粘り強さ: {gritScore.perseverance} / 5</li>
-            <li>情熱: {gritScore.passion} / 5</li>
-            <li>目標志向性: {gritScore.goal_orientation} / 5</li>
-            <li>回復力: {gritScore.resilience} / 5</li>
+            {(Object.keys(gritScore) as (keyof GritScore)[]).map((key) => (
+              <li key={key}>
+                {labelMap[key]}: {gritScore[key]} / 5
+              </li>
+            ))}
           </ul>
 
           <hr style={{ margin: '1rem 0' }} />
@@ -199,16 +206,19 @@ export default function Home() {
               <li key={idx} style={{ marginBottom: '0.5rem' }}>
                 <div>回答 {idx + 1}: 「{entry.userAnswer.slice(0, 20)}...」</div>
                 <div>
-                  影響した要素:{' '}
+                  影響要素:{' '}
                   {entry.relatedFactors.length > 0
-                    ? entry.relatedFactors.join(', ')
+                    ? entry.relatedFactors.map((f) => labelMap[f as keyof GritScore]).join(', ')
                     : 'なし'}
                 </div>
                 <div>
                   Δ:{' '}
                   {Object.entries(entry.delta)
                     .filter(([, val]) => val !== 0)
-                    .map(([key, val]) => `${key}: ${val > 0 ? '+' : ''}${val}`)
+                    .map(
+                      ([key, val]) =>
+                        `${labelMap[key as keyof GritScore]}: ${val > 0 ? '+' : ''}${val}`
+                    )
                     .join(', ') || '変化なし'}
                 </div>
               </li>
