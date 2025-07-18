@@ -127,13 +127,23 @@ export default function Home() {
     .filter((m) => m.role === 'assistant' && !m.isRetryPrompt)
     .pop()?.index;
 
-  const showInput = (() => {
-    if (lastRealQuestionIndex == null) return false;
-    const sliced = messages.slice(lastRealQuestionIndex + 1);
-    const userMessages = sliced.filter((m) => m.role === 'user');
-    const assistantMessages = sliced.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    return userMessages.length <= assistantMessages.length;
-  })();
+const showInput = (() => {
+  const realQuestions = messages
+    .map((m, i) => ({ ...m, index: i }))
+    .filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+
+  const lastQuestion = realQuestions[realQuestions.length - 1];
+  if (!lastQuestion) return false;
+
+  const afterLastQuestion = messages.slice(lastQuestion.index + 1);
+
+  const hasValidAnswer = afterLastQuestion.some((m) => m.role === 'user');
+  const hasRetryPrompt = afterLastQuestion.some((m) => m.role === 'assistant' && m.isRetryPrompt);
+
+  // 入力欄を表示すべきなのは、有効な回答がまだないか、再回答プロンプトが出ている時
+  return !hasValidAnswer || hasRetryPrompt;
+})();
+
 
   return (
     <>
