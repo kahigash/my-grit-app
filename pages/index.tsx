@@ -94,24 +94,28 @@ export default function Home() {
           isRetryPrompt: true
         }]);
         setIsRetry(true);
-        return;
-      }
-
-      const validQuestions = updatedMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-      if (validQuestions.length >= 5) {
-        const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
-        setMessages([...updatedMessages, { role: 'assistant', content: closingMessage }]);
         setLoading(false);
         return;
       }
 
-      const res = await axios.post('/api/generate-question', { messages: updatedMessages });
+      const newMessages = [...updatedMessages];
+      const validQuestions = newMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+      const validAnswers = newMessages.filter((m, i) => m.role === 'user' && !newMessages[i - 1]?.isRetryPrompt);
+
+      if (validQuestions.length >= 5 && validAnswers.length >= 5) {
+        const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
+        setMessages([...newMessages, { role: 'assistant', content: closingMessage }]);
+        setLoading(false);
+        return;
+      }
+
+      const res = await axios.post('/api/generate-question', { messages: newMessages });
       const assistantMessage: Message = { role: 'assistant', content: res.data.result };
-      const newMessages = [...updatedMessages, assistantMessage];
-      setMessages(newMessages);
+      const withNewQ = [...newMessages, assistantMessage];
+      setMessages(withNewQ);
       setIsRetry(false);
 
-      const scoreRes = await axios.post('/api/evaluate-grit', { messages: newMessages });
+      const scoreRes = await axios.post('/api/evaluate-grit', { messages: withNewQ });
       const newScore: GritScore = scoreRes.data.score;
       const newFactors: string[] = scoreRes.data.relatedFactors || [];
       const delta: Partial<GritScore> = {
@@ -132,14 +136,13 @@ export default function Home() {
 
   const showInput = (() => {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+    const realAnswers = messages.filter((m, i) => m.role === 'user' && !messages[i - 1]?.isRetryPrompt);
+    if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    if (realQuestions.length >= 5) return false;
     if (lastQIndex === -1) return true;
-
     const afterLastQ = messages.slice(lastQIndex + 1);
     const hasAnswer = afterLastQ.some((m) => m.role === 'user');
     const hasRetryPrompt = afterLastQ.some((m) => m.role === 'assistant' && m.isRetryPrompt);
-
     return !hasAnswer || hasRetryPrompt;
   })();
 
@@ -154,7 +157,7 @@ export default function Home() {
           <h1>GRIT測定インタビュー</h1>
           {messages.map((msg, idx) => {
             const isQ = msg.role === 'assistant';
-            const isClosing = isQ && msg.content.includes('以上で質問は終了') || msg.content.includes('インタビューは終了');
+            const isClosing = isQ && (msg.content.includes('以上で質問は終了') || msg.content.includes('インタビューは終了'));
             const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.isRetryPrompt && !isClosing).length;
             return (
               <div key={idx} style={{ marginBottom: '1rem' }}>
@@ -196,7 +199,7 @@ export default function Home() {
                 <div>Δ: {
                   Object.entries(entry.delta)
                     .filter(([, val]) => val !== 0)
-                    .map(([key, val]) => `${labelMap[key as keyof GritScore]}: ${val > 0 ? '+' : ''}${val}`)
+                    .map(([key, val]) => `${labelMap[key as keyof GritScore]}: ${val! > 0 ? '+' : ''}${val}`)
                     .join(', ') || '変化なし'
                 }</div>
               </li>
