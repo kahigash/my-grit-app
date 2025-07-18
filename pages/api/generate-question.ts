@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid request format' });
   }
 
-  const systemPrompt = `
+const systemPrompt = `
 あなたは企業の採用面接におけるインタビュアーです。候補者の「GRIT（やり抜く力）」を測定するため、以下の方針で質問を作成してください。
 
 【質問方針】
@@ -27,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 - 候補者の経験・行動・思考パターンからGRITの傾向がわかるような、間接的かつ具体的な質問を出してください。
 - 前の回答に対して短い共感コメント（例：「それは大変でしたね」など）を添えてください。
 - その後に、次の質問を提示してください。
-- 回答の深掘りを意識してください。「xxとのことですが、なぜそうしたのか？」「xxのときどう感じたか？」などを補助的に使って構いません。
+- 回答の深掘りを意識してください。前の回答内容を引用しながら「〜とのことですが、なぜそうしたのか？」「そのときどう感じましたか？」のような形で掘り下げてください。
 `;
 
   const fullMessages = [
