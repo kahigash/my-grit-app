@@ -1,5 +1,4 @@
 // /pages/api/evaluate-grit.ts
-
 import { NextApiRequest, NextApiResponse } from 'next';
 import { OpenAI } from 'openai';
 
@@ -26,25 +25,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .join('\n---\n');
 
   const prompt = `
-以下は面接の回答記録です。この内容からGRITの以下4要素について、それぞれ0〜5点で評価してください。
+以下の面接回答を読んで、各回答から見られるGRITの構成要素を総合的に評価してください。
 
 【評価項目】
-- 粘り強さ（Perseverance）
-- 情熱（Passion）
-- 目標志向性（Goal Orientation）
-- 回復力（Resilience）
+- 粘り強さ（perseverance）
+- 情熱（passion）
+- 目標志向性（goal_orientation）
+- 回復力（resilience）
 
-それぞれ以下のJSON形式で数値（整数）で返してください。該当する情報がなければ「0」を返してください。
-
-出力形式：
+以下のJSON形式で、スコア（0～5）と影響した要素の配列を返してください。
 {
-  "perseverance": 数値,
-  "passion": 数値,
-  "goal_orientation": 数値,
-  "resilience": 数値
+  "score": {
+    "perseverance": 数値,
+    "passion": 数値,
+    "goal_orientation": 数値,
+    "resilience": 数値
+  },
+  "relatedFactors": ["perseverance", "passion"]
 }
 
-回答記録：
+該当しない場合は0、relatedFactorsがなければ空配列にしてください。
+
+回答全文：
 ${userAnswers}
 `;
 
@@ -55,8 +57,8 @@ ${userAnswers}
       temperature: 0.3,
     });
 
-    const content = response.choices?.[0]?.message?.content?.trim() || '{}';
-    const json = JSON.parse(content);
+    const text = response.choices[0]?.message?.content?.trim() || '{}';
+    const json = JSON.parse(text);
 
     res.status(200).json(json);
   } catch (err: any) {
