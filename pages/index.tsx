@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
+type Role = 'user' | 'assistant';
+
 interface Message {
-  role: 'user' | 'assistant';
+  role: Role;
   content: string;
 }
 
@@ -22,7 +24,7 @@ export default function Home() {
   const handleSubmit = async () => {
     if (!input.trim() || loading) return;
 
-    const updatedMessages = [...messages, { role: 'user', content: input }];
+    const updatedMessages: Message[] = [...messages, { role: 'user', content: input }];
     setMessages(updatedMessages);
     setInput('');
     setLoading(true);
