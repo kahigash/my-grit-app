@@ -83,18 +83,18 @@ export default function Home() {
         <h1>GRIT測定インタビュー</h1>
 
         {messages.map((msg, idx) => {
-          const isQuestion = msg.role === 'assistant';
-          const qNum = messages
-            .slice(0, idx + 1)
-            .filter((m) => m.role === 'assistant').length;
+  const isQuestion = msg.role === 'assistant';
+  const qNum = messages
+    .slice(0, idx + 1)
+    .filter((m) => m.role === 'assistant').length;
 
-          return (
-            <div key={idx} style={{ marginBottom: '1rem' }}>
-              <strong>{isQuestion ? `Q: 質問 ${qNum} / 5` : 'A:'}</strong>{' '}
-              {msg.content}
-            </div>
-          );
-        })}
+  return (
+    <div key={idx} style={{ marginBottom: '1rem' }}>
+      <strong>{isQuestion ? `Q: 質問 ${qNum} / 5` : 'A:'}</strong>{' '}
+      {msg.content}
+    </div>
+  );
+})}
 
         <div ref={messagesEndRef} />
 
