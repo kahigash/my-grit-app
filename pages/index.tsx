@@ -18,6 +18,12 @@ interface GritScore {
   resilience: number;
 }
 
+interface ScoreChange {
+  delta: Partial<GritScore>;
+  relatedFactors: string[]; // 例: ["perseverance", "passion"]
+  userAnswer: string;
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -29,6 +35,7 @@ export default function Home() {
     goal_orientation: 0,
     resilience: 0,
   });
+  const [scoreHistory, setScoreHistory] = useState<ScoreChange[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -67,28 +74,39 @@ export default function Home() {
     setError('');
 
     try {
-      // 質問生成API
+      // 質問生成
       const res = await axios.post('/api/generate-question', {
         messages: updatedMessages,
       });
 
-      if (res.data.result) {
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: res.data.result,
-        };
-        setMessages([...updatedMessages, assistantMessage]);
-      } else {
-        setError('質問の取得に失敗しました。');
-      }
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: res.data.result,
+      };
+      const newMessages = [...updatedMessages, assistantMessage];
+      setMessages(newMessages);
 
-      // GRITスコア再評価
+      // GRITスコア評価
       const scoreRes = await axios.post('/api/evaluate-grit', {
-        messages: updatedMessages,
+        messages: newMessages,
       });
 
       if (scoreRes.data) {
-        setGritScore(scoreRes.data);
+        const newScore: GritScore = scoreRes.data.score;
+        const newFactors: string[] = scoreRes.data.relatedFactors || [];
+
+        const delta: Partial<GritScore> = {
+          perseverance: newScore.perseverance - gritScore.perseverance,
+          passion: newScore.passion - gritScore.passion,
+          goal_orientation: newScore.goal_orientation - gritScore.goal_orientation,
+          resilience: newScore.resilience - gritScore.resilience,
+        };
+
+        setGritScore(newScore);
+        setScoreHistory([
+          ...scoreHistory,
+          { delta, relatedFactors: newFactors, userAnswer: input },
+        ]);
       }
     } catch (err) {
       setError('エラーが発生しました。');
@@ -103,74 +121,100 @@ export default function Home() {
         <title>{process.env.NEXT_PUBLIC_APP_TITLE || 'GRIT測定アプリ'}</title>
       </Head>
 
-      <div style={{ padding: '2rem', position: 'relative' }}>
-        <h1>GRIT測定インタビュー</h1>
+      <div style={{ display: 'flex', padding: '2rem', gap: '2rem' }}>
+        {/* 左カラム（2/3） */}
+        <div style={{ flex: 2 }}>
+          <h1>GRIT測定インタビュー</h1>
 
-        {/* GRITスコア表示 */}
+          {messages.map((msg, idx) => {
+            const isQuestion = msg.role === 'assistant';
+            const isClosing = isQuestion && msg.content.includes('以上で質問は終了');
+            const previousQuestions = messages
+              .slice(0, idx)
+              .filter(
+                (m) =>
+                  m.role === 'assistant' &&
+                  !m.content.includes('以上で質問は終了')
+              ).length;
+
+            return (
+              <div key={idx} style={{ marginBottom: '1rem' }}>
+                <strong>
+                  {isQuestion && !isClosing
+                    ? `Q: 質問 ${previousQuestions + 1} / 5`
+                    : !isQuestion
+                    ? 'A:'
+                    : ''}
+                </strong>{' '}
+                {msg.content}
+              </div>
+            );
+          })}
+
+          <div ref={messagesEndRef} />
+
+          {error && <div style={{ color: 'red' }}>{error}</div>}
+
+          {!loading &&
+            messages.filter((m) => m.role === 'assistant').length >
+              messages.filter((m) => m.role === 'user').length && (
+              <div>
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="ここに回答を入力してください"
+                  rows={3}
+                  style={{ width: '100%', marginBottom: '1rem' }}
+                />
+                <button onClick={handleSubmit}>送信</button>
+              </div>
+            )}
+        </div>
+
+        {/* 右カラム（1/3） */}
         <div
           style={{
-            position: 'absolute',
-            top: '1rem',
-            right: '1rem',
-            backgroundColor: '#f0f0f0',
+            flex: 1,
+            backgroundColor: '#f9f9f9',
             padding: '1rem',
             borderRadius: '8px',
-            width: '220px',
+            height: '100%',
+            overflowY: 'auto',
             fontSize: '0.9rem',
-            boxShadow: '0 0 5px rgba(0,0,0,0.1)',
+            boxShadow: '0 0 4px rgba(0,0,0,0.1)',
           }}
         >
-          <strong>GRITスコア</strong>
+          <strong>現在のGRITスコア</strong>
           <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
             <li>粘り強さ: {gritScore.perseverance} / 5</li>
             <li>情熱: {gritScore.passion} / 5</li>
             <li>目標志向性: {gritScore.goal_orientation} / 5</li>
             <li>回復力: {gritScore.resilience} / 5</li>
           </ul>
+
+          <hr style={{ margin: '1rem 0' }} />
+          <strong>スコア変動履歴</strong>
+          <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
+            {scoreHistory.map((entry, idx) => (
+              <li key={idx} style={{ marginBottom: '0.5rem' }}>
+                <div>回答 {idx + 1}: 「{entry.userAnswer.slice(0, 20)}...」</div>
+                <div>
+                  影響した要素:{' '}
+                  {entry.relatedFactors.length > 0
+                    ? entry.relatedFactors.join(', ')
+                    : 'なし'}
+                </div>
+                <div>
+                  Δ:{' '}
+                  {Object.entries(entry.delta)
+                    .filter(([, val]) => val !== 0)
+                    .map(([key, val]) => `${key}: ${val > 0 ? '+' : ''}${val}`)
+                    .join(', ') || '変化なし'}
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-
-        {/* チャット履歴 */}
-        {messages.map((msg, idx) => {
-          const isQuestion = msg.role === 'assistant';
-          const isClosing = isQuestion && msg.content.includes('以上で質問は終了');
-          const previousQuestions = messages
-            .slice(0, idx)
-            .filter(
-              (m) => m.role === 'assistant' && !m.content.includes('以上で質問は終了')
-            ).length;
-
-          return (
-            <div key={idx} style={{ marginBottom: '1rem' }}>
-              <strong>
-                {isQuestion && !isClosing
-                  ? `Q: 質問 ${previousQuestions + 1} / 5`
-                  : !isQuestion
-                  ? 'A:'
-                  : ''}
-              </strong>{' '}
-              {msg.content}
-            </div>
-          );
-        })}
-
-        <div ref={messagesEndRef} />
-
-        {error && <div style={{ color: 'red' }}>{error}</div>}
-
-        {!loading &&
-          messages.filter((m) => m.role === 'assistant').length >
-            messages.filter((m) => m.role === 'user').length && (
-            <div>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="ここに回答を入力してください"
-                rows={3}
-                style={{ width: '100%', marginBottom: '1rem' }}
-              />
-              <button onClick={handleSubmit}>送信</button>
-            </div>
-          )}
       </div>
     </>
   );
