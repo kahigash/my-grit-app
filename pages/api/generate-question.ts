@@ -19,9 +19,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: 'Invalid request format' });
   }
 
-  const userAnswers = messages.filter((m: any) => m.role === 'user');
-  const isLastQuestion = userAnswers.length >= MAX_QUESTIONS;
-
   const systemPrompt = `
 あなたは企業の採用面接におけるインタビュアーです。候補者の「GRIT（やり抜く力）」を測定するため、以下の方針で質問を作成してください。
 
@@ -42,36 +39,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ];
 
   try {
-    if (isLastQuestion) {
-      const lastUserAnswer = userAnswers[userAnswers.length - 1]?.content || '';
-      const summaryPrompt = `
-以下の候補者の回答に対し、簡単な共感コメントを添えて締めのメッセージを作成してください。最後に「以上で質問は終了です。お疲れ様でした。」と付け加えてください。
+    // 質問数をカウント
+    const questionCount = messages.filter((m: any) => m.role === 'assistant').length;
 
-【回答】
-${lastUserAnswer}
-
-【出力制約】
-- 120文字以内で簡潔にまとめてください。
-- 「Q:」「A:」などのラベルは含めないでください。
-`;
-
-      const summaryMessages = [
-        { role: 'system', content: summaryPrompt },
-      ];
-
-      const response = await openai.chat.completions.create({
-        model: MODEL_NAME,
-        messages: summaryMessages as any,
-        temperature: 0.7,
-      });
-
-      const result = response.choices?.[0]?.message?.content?.trim() || '';
-      return res.status(200).json({ result });
+    if (questionCount >= MAX_QUESTIONS) {
+      const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || '';
+      const closingResponse = `共感します。${lastUserMessage.slice(0, 50)}... のような経験は貴重ですね。以上で質問は終了です。お疲れ様でした。`;
+      return res.status(200).json({ result: closingResponse });
     }
 
     const response = await openai.chat.completions.create({
       model: MODEL_NAME,
-      messages: fullMessages as any,
+      messages: fullMessages,
       temperature: 0.7,
     });
 
