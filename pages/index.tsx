@@ -7,7 +7,7 @@ export default function Home() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // 初期質問を1問だけ固定で表示
+  // 初期質問（固定）
   useEffect(() => {
     setQuestions([
       'これまでに、どうしてもやり遂げたいと思って粘り強く取り組んだ長期的な目標やプロジェクトがあれば教えてください。その際に直面した最も大きな困難と、それをどう乗り越えたかを詳しく聞かせてください。'
@@ -54,7 +54,26 @@ export default function Home() {
           <p><strong>Q{i + 1}:</strong> {q}</p>
 
           {i < currentQuestionIndex && (
-            <>
-              <p><strong>A:</strong> {answers[i]}</p>
-            </>
-         
+            <p><strong>A:</strong> {answers[i]}</p>
+          )}
+
+          {i === currentQuestionIndex && (
+            <textarea
+              value={currentAnswer}
+              onChange={(e) => setCurrentAnswer(e.target.value)}
+              placeholder="回答を入力してください"
+              rows={4}
+              style={{ width: '100%', maxWidth: '600px' }}
+            />
+          )}
+        </div>
+      ))}
+
+      <button onClick={handleNext} disabled={!currentAnswer.trim()}>
+        次の質問へ
+      </button>
+
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </div>
+  );
+}
