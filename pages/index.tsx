@@ -122,12 +122,16 @@ export default function Home() {
     }
   };
 
-const validQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-const validAnswers = messages
-  .filter((m, i) => m.role === 'user' && !messages[i - 1]?.isRetryPrompt);
+  const lastRealQuestionIndex = messages
+    .map((m, i) => ({ ...m, index: i }))
+    .filter((m) => m.role === 'assistant' && !m.isRetryPrompt)
+    .pop()?.index;
 
-const showInput = validQuestions.length < 6 && validAnswers.length < validQuestions.length;
+  const hasUserAnswerToLastQuestion = lastRealQuestionIndex != null &&
+    messages.slice(lastRealQuestionIndex + 1).some((m) => m.role === 'user');
 
+  const showInput = lastRealQuestionIndex != null &&
+    (!hasUserAnswerToLastQuestion && messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).length < 6);
 
   return (
     <>
