@@ -46,7 +46,6 @@ export default function Home() {
     resilience: 0,
   });
   const [scoreHistory, setScoreHistory] = useState<ScoreChange[]>([]);
-  const [isRetry, setIsRetry] = useState(false);
   const [retryState, setRetryState] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -101,12 +100,16 @@ export default function Home() {
 
       const newMessages = [...updatedMessages];
       const realQuestions = newMessages.filter(m => m.role === 'assistant' && !m.isRetryPrompt);
-      const realAnswers = newMessages.filter((m, i) => {
-        if (m.role !== 'user') return false;
+
+      let realAnswers: Message[] = [];
+      for (let i = 0; i < newMessages.length; i++) {
+        if (newMessages[i].role !== 'user') continue;
         const prev = newMessages[i - 1];
         const prev2 = newMessages[i - 2];
-        return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
-      });
+        if (!(prev?.isRetryPrompt || prev2?.isRetryPrompt)) {
+          realAnswers.push(newMessages[i]);
+        }
+      }
 
       if (realQuestions.length >= 5 && realAnswers.length >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
@@ -142,12 +145,15 @@ export default function Home() {
 
   const showInput = (() => {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    const realAnswers = messages.filter((m, i) => {
-      if (m.role !== 'user') return false;
+    let realAnswers: Message[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role !== 'user') continue;
       const prev = messages[i - 1];
       const prev2 = messages[i - 2];
-      return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
-    });
+      if (!(prev?.isRetryPrompt || prev2?.isRetryPrompt)) {
+        realAnswers.push(messages[i]);
+      }
+    }
     if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
     if (lastQIndex === -1) return true;
