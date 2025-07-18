@@ -7,29 +7,22 @@ export default function Home() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // 初期質問を1問だけ固定で表示
   useEffect(() => {
-    setQuestions(['あなたが最近やり抜いた経験について教えてください。']);
+    setQuestions([
+      'これまでに、どうしてもやり遂げたいと思って粘り強く取り組んだ長期的な目標やプロジェクトがあれば教えてください。その際に直面した最も大きな困難と、それをどう乗り越えたかを詳しく聞かせてください。'
+    ]);
     setAnswers(['']);
   }, []);
 
   const handleNext = async () => {
     const updatedAnswers = [...answers];
     updatedAnswers[currentQuestionIndex] = currentAnswer;
-    setAnswers(updatedAnswers);
 
-    const messages = [
-      {
-        role: 'system',
-        content: `あなたは企業の採用面接におけるインタビュアーです。
-候補者のGRIT（やり抜く力）を間接的に測定してください。
-回答に共感や理解を示したうえで、次の質問を1つ、日本語で出してください。`,
-      },
-      ...questions.map((q, i) => ({
-        role: 'user',
-        content: `Q${i + 1}: ${q}\nA: ${updatedAnswers[i] ?? ''}`,
-      })),
-      { role: 'user', content: '次の質問をお願いします。' },
-    ];
+    const messages = questions.map((q, i) => ({
+      role: 'user',
+      content: `Q${i + 1}: ${q}\nA: ${updatedAnswers[i] ?? ''}`,
+    }));
 
     try {
       const res = await fetch('/api/generate-question', {
@@ -39,7 +32,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.result) {
-        setQuestions([...questions, data.result]);
+        setQuestions([...questions, data.result.trim()]);
         setAnswers([...updatedAnswers, '']);
         setCurrentAnswer('');
         setCurrentQuestionIndex(currentQuestionIndex + 1);
@@ -53,27 +46,15 @@ export default function Home() {
   };
 
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
       <h1>GRIT測定インタビュー</h1>
+
       {questions.map((q, i) => (
-        <div key={i} style={{ marginBottom: '1.5rem' }}>
+        <div key={i} style={{ marginBottom: '2rem' }}>
           <p><strong>Q{i + 1}:</strong> {q}</p>
+
           {i < currentQuestionIndex && (
-            <p><strong>A:</strong> {answers[i]}</p>
-          )}
-          {i === currentQuestionIndex && (
-            <textarea
-              value={currentAnswer}
-              onChange={(e) => setCurrentAnswer(e.target.value)}
-              placeholder="回答を入力してください"
-              rows={4}
-              style={{ width: '100%', maxWidth: '600px' }}
-            />
-          )}
-        </div>
-      ))}
-      <button onClick={handleNext}>次の質問へ</button>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-    </div>
-  );
-}
+            <>
+              <p><strong>A:</strong> {answers[i]}</p>
+            </>
+         
