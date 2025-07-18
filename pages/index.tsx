@@ -100,7 +100,15 @@ export default function Home() {
 
       const newMessages = [...updatedMessages];
       const validQuestions = newMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-      const validAnswers = newMessages.filter((m, i) => m.role === 'user' && !newMessages[i - 1]?.isRetryPrompt);
+
+      const validAnswers = newMessages.filter((m, i) => {
+        if (m.role !== 'user') return false;
+        const prev = newMessages[i - 1];
+        const prevIsRetryPrompt = prev?.role === 'assistant' && prev?.isRetryPrompt;
+        const twoBefore = newMessages[i - 2];
+        const twoBeforeIsRetryPrompt = twoBefore?.role === 'assistant' && twoBefore?.isRetryPrompt;
+        return !prevIsRetryPrompt && !twoBeforeIsRetryPrompt;
+      });
 
       if (validQuestions.length >= 5 && validAnswers.length >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
@@ -136,7 +144,14 @@ export default function Home() {
 
   const showInput = (() => {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    const realAnswers = messages.filter((m, i) => m.role === 'user' && !messages[i - 1]?.isRetryPrompt);
+    const realAnswers = messages.filter((m, i) => {
+      if (m.role !== 'user') return false;
+      const prev = messages[i - 1];
+      const prevIsRetryPrompt = prev?.role === 'assistant' && prev?.isRetryPrompt;
+      const twoBefore = messages[i - 2];
+      const twoBeforeIsRetryPrompt = twoBefore?.role === 'assistant' && twoBefore?.isRetryPrompt;
+      return !prevIsRetryPrompt && !twoBeforeIsRetryPrompt;
+    });
     if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
     if (lastQIndex === -1) return true;
