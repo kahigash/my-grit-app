@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Q5まで質問済みならクロージング
   if (questionCount >= MAX_QUESTIONS) {
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || '';
-    const closingResponse = `ご協力ありがとうございました。${lastUserMessage.slice(0, 50)}... のような経験はとても興味深いです。以上で質問は終了です。お疲れ様でした。`;
+    const closingResponse = `ご協力ありがとうございました。これまでのお話はとても興味深かったです。以上で質問は終了です。お疲れ様でした。`;
     return res.status(200).json({ result: closingResponse });
   }
 
