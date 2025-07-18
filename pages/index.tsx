@@ -122,9 +122,12 @@ export default function Home() {
     }
   };
 
-  const assistantCount = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).length;
-  const userCount = messages.filter((m) => m.role === 'user').length;
-  const showInput = assistantCount < 6 && assistantCount > userCount;
+const validQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+const validAnswers = messages
+  .filter((m, i) => m.role === 'user' && !messages[i - 1]?.isRetryPrompt);
+
+const showInput = validQuestions.length < 6 && validAnswers.length < validQuestions.length;
+
 
   return (
     <>
