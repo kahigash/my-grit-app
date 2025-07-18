@@ -70,6 +70,23 @@ export default function Home() {
     loadInitialQuestion();
   }, []);
 
+  const isValidAnswer = (messages: Message[], index: number): boolean => {
+    const prev = messages[index - 1];
+    const prev2 = messages[index - 2];
+    return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
+  };
+
+  const countRealAnswers = (messages: Message[]): number => {
+    const realAnswers: Message[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role !== 'user') continue;
+      if (isValidAnswer(messages, i)) {
+        realAnswers.push(messages[i]);
+      }
+    }
+    return realAnswers.length;
+  };
+
   const handleSubmit = async () => {
     if (!input.trim()) return;
 
@@ -100,18 +117,9 @@ export default function Home() {
 
       const newMessages = [...updatedMessages];
       const realQuestions = newMessages.filter(m => m.role === 'assistant' && !m.isRetryPrompt);
+      const realAnswersCount = countRealAnswers(newMessages);
 
-      let realAnswers: Message[] = [];
-      for (let i = 0; i < newMessages.length; i++) {
-        if (newMessages[i].role !== 'user') continue;
-        const prev = newMessages[i - 1];
-        const prev2 = newMessages[i - 2];
-        if (!(prev?.isRetryPrompt || prev2?.isRetryPrompt)) {
-          realAnswers.push(newMessages[i]);
-        }
-      }
-
-      if (realQuestions.length >= 5 && realAnswers.length >= 5) {
+      if (realQuestions.length >= 5 && realAnswersCount >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
         setMessages([...newMessages, { role: 'assistant', content: closingMessage }]);
         setLoading(false);
@@ -145,16 +153,8 @@ export default function Home() {
 
   const showInput = (() => {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    let realAnswers: Message[] = [];
-    for (let i = 0; i < messages.length; i++) {
-      if (messages[i].role !== 'user') continue;
-      const prev = messages[i - 1];
-      const prev2 = messages[i - 2];
-      if (!(prev?.isRetryPrompt || prev2?.isRetryPrompt)) {
-        realAnswers.push(messages[i]);
-      }
-    }
-    if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
+    const realAnswersCount = countRealAnswers(messages);
+    if (realQuestions.length >= 5 && realAnswersCount >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
     if (lastQIndex === -1) return true;
     const afterLastQ = messages.slice(lastQIndex + 1);
