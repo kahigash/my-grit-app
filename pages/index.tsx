@@ -1,4 +1,7 @@
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
+import Head from 'next/head';
 import axios from 'axios';
 
 type Role = 'user' | 'assistant';
@@ -71,39 +74,45 @@ export default function Home() {
   };
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1>GRIT測定インタビュー</h1>
+    <>
+      <Head>
+        <title>{process.env.NEXT_PUBLIC_APP_TITLE || 'GRIT測定アプリ'}</title>
+      </Head>
 
-      {messages.map((msg, idx) => {
-        const isQuestion = msg.role === 'assistant';
-        const qNum = messages
-          .slice(0, idx + 1)
-          .filter((m) => m.role === 'assistant').length;
+      <div style={{ padding: '2rem' }}>
+        <h1>GRIT測定インタビュー</h1>
 
-        return (
-          <div key={idx} style={{ marginBottom: '1rem' }}>
-            <strong>{isQuestion ? `Q: 質問 ${qNum} / 5` : 'A:'}</strong>{' '}
-            {msg.content}
+        {messages.map((msg, idx) => {
+          const isQuestion = msg.role === 'assistant';
+          const qNum = messages
+            .slice(0, idx + 1)
+            .filter((m) => m.role === 'assistant').length;
+
+          return (
+            <div key={idx} style={{ marginBottom: '1rem' }}>
+              <strong>{isQuestion ? `Q: 質問 ${qNum} / 5` : 'A:'}</strong>{' '}
+              {msg.content}
+            </div>
+          );
+        })}
+
+        <div ref={messagesEndRef} />
+
+        {error && <div style={{ color: 'red' }}>{error}</div>}
+
+        {!loading && messages.filter((m) => m.role === 'assistant').length < 5 && (
+          <div>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="ここに回答を入力してください"
+              rows={3}
+              style={{ width: '100%', marginBottom: '1rem' }}
+            />
+            <button onClick={handleSubmit}>送信</button>
           </div>
-        );
-      })}
-
-      <div ref={messagesEndRef} />
-
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-
-      {!loading && messages.filter((m) => m.role === 'assistant').length < 5 && (
-        <div>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="ここに回答を入力してください"
-            rows={3}
-            style={{ width: '100%', marginBottom: '1rem' }}
-          />
-          <button onClick={handleSubmit}>送信</button>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
