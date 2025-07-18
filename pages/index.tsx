@@ -100,18 +100,21 @@ export default function Home() {
 
         {error && <div style={{ color: 'red' }}>{error}</div>}
 
-        {!loading && messages.filter((m) => m.role === 'assistant').length < 5 && (
-          <div>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="ここに回答を入力してください"
-              rows={3}
-              style={{ width: '100%', marginBottom: '1rem' }}
-            />
-            <button onClick={handleSubmit}>送信</button>
-          </div>
-        )}
+        {!loading &&
+  messages.filter((m) => m.role === 'assistant').length >
+    messages.filter((m) => m.role === 'user').length && (
+    <div>
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        placeholder="ここに回答を入力してください"
+        rows={3}
+        style={{ width: '100%', marginBottom: '1rem' }}
+      />
+      <button onClick={handleSubmit}>送信</button>
+    </div>
+)}
+
       </div>
     </>
   );
