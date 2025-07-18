@@ -1,34 +1,40 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 
-// Message型に'system'も許可
 interface Message {
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant';
   content: string;
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: 'assistant',
+      content:
+        'これまでに、どうしてもやり遂げたいと思って粘り強く取り組んだ長期的な目標やプロジェクトがあれば教えてください。その際に直面した最も大きな困難と、それをどう乗り越えたかを詳しく聞かせてください。',
+    },
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSubmit = async () => {
+    if (!input.trim() || loading) return;
 
-    const updatedMessages: Message[] = [...messages, { role: 'user', content: input }];
+    const updatedMessages = [...messages, { role: 'user', content: input }];
     setMessages(updatedMessages);
     setInput('');
     setLoading(true);
     setError('');
 
     try {
-      const response = await axios.post('/api/generate-question', { messages: updatedMessages });
-      const newQuestion = response.data.result;
-      setMessages([...updatedMessages, { role: 'assistant', content: newQuestion }]);
-    } catch (err: any) {
-      console.error(err);
+      const response = await axios.post('/api/generate-question', {
+        messages: updatedMessages,
+      });
+      const result = response.data.result;
+      setMessages([...updatedMessages, { role: 'assistant', content: result }]);
+    } catch (err) {
       setError('エラーが発生しました。もう一度お試しください。');
     } finally {
       setLoading(false);
@@ -36,42 +42,40 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
   return (
-    <div style={{ padding: '2rem', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ maxWidth: 800, margin: '0 auto', padding: '2rem' }}>
       <h1>GRIT測定インタビュー</h1>
-
-      {messages.map((msg, index) => (
-        <div key={index} style={{ marginBottom: '1rem' }}>
-          <strong>{msg.role === 'user' ? 'A' : msg.role === 'assistant' ? 'Q' : ''}</strong>: {msg.content}
-        </div>
-      ))}
-
-      <div ref={bottomRef} />
-
-      {messages.filter(m => m.role === 'assistant').length < 6 && (
-        <>
+      <div style={{ marginBottom: '1rem' }}>
+        {messages.map((msg, index) => (
+          <div key={index} style={{ marginBottom: '1rem' }}>
+            <strong>{msg.role === 'user' ? 'A' : 'Q'}:</strong> {msg.content}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+      {!loading && messages.length < 12 && (
+        <div>
           <textarea
-            rows={3}
+            rows={4}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="ここに回答を入力してください"
-            style={{ width: '100%', padding: '0.5rem', fontSize: '1rem', marginBottom: '0.5rem' }}
+            style={{ width: '100%', marginBottom: '1rem' }}
           />
-          <button
-            onClick={handleSend}
-            disabled={loading}
-            style={{ padding: '0.5rem 1rem', fontSize: '1rem' }}
-          >
-            送信
-          </button>
-        </>
+          <button onClick={handleSubmit}>送信</button>
+        </div>
       )}
-
       {loading && <p>生成中...</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
