@@ -97,6 +97,14 @@ export default function Home() {
         return;
       }
 
+      const validQuestions = updatedMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+      if (validQuestions.length >= 5) {
+        const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
+        setMessages([...updatedMessages, { role: 'assistant', content: closingMessage }]);
+        setLoading(false);
+        return;
+      }
+
       const res = await axios.post('/api/generate-question', { messages: updatedMessages });
       const assistantMessage: Message = { role: 'assistant', content: res.data.result };
       const newMessages = [...updatedMessages, assistantMessage];
@@ -122,28 +130,18 @@ export default function Home() {
     }
   };
 
-  const lastRealQuestionIndex = messages
-    .map((m, i) => ({ ...m, index: i }))
-    .filter((m) => m.role === 'assistant' && !m.isRetryPrompt)
-    .pop()?.index;
+  const showInput = (() => {
+    const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+    const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
+    if (realQuestions.length >= 5) return false;
+    if (lastQIndex === -1) return true;
 
-const showInput = (() => {
-  const realQuestions = messages
-    .map((m, i) => ({ ...m, index: i }))
-    .filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+    const afterLastQ = messages.slice(lastQIndex + 1);
+    const hasAnswer = afterLastQ.some((m) => m.role === 'user');
+    const hasRetryPrompt = afterLastQ.some((m) => m.role === 'assistant' && m.isRetryPrompt);
 
-  const lastQuestion = realQuestions[realQuestions.length - 1];
-  if (!lastQuestion) return false;
-
-  const afterLastQuestion = messages.slice(lastQuestion.index + 1);
-
-  const hasValidAnswer = afterLastQuestion.some((m) => m.role === 'user');
-  const hasRetryPrompt = afterLastQuestion.some((m) => m.role === 'assistant' && m.isRetryPrompt);
-
-  // 入力欄を表示すべきなのは、有効な回答がまだないか、再回答プロンプトが出ている時
-  return !hasValidAnswer || hasRetryPrompt;
-})();
-
+    return !hasAnswer || hasRetryPrompt;
+  })();
 
   return (
     <>
@@ -156,8 +154,8 @@ const showInput = (() => {
           <h1>GRIT測定インタビュー</h1>
           {messages.map((msg, idx) => {
             const isQ = msg.role === 'assistant';
-            const isClosing = isQ && msg.content.includes('以上で質問は終了');
-            const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.content.includes('以上で質問は終了') && !m.isRetryPrompt).length;
+            const isClosing = isQ && msg.content.includes('以上で質問は終了') || msg.content.includes('インタビューは終了');
+            const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.isRetryPrompt && !isClosing).length;
             return (
               <div key={idx} style={{ marginBottom: '1rem' }}>
                 <strong>{isQ && !isClosing && !msg.isRetryPrompt ? `Q: 質問 ${qNum + 1} / 5` : !isQ ? 'A:' : ''}</strong>{' '}
