@@ -5,7 +5,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-const MODEL_NAME = process.env.MODEL_NAME ?? 'gpt-4o'; // ← 必要に応じて gpt-3.5-turbo に変更可能
+const MODEL_NAME = process.env.MODEL_NAME ?? 'gpt-4o';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -38,21 +38,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ];
 
   try {
-    // 質問数をカウント（user role の質問だけカウント）
     const questionCount = messages.filter((msg: any) => msg.role === 'user' && msg.content?.includes('回答:')).length;
 
     let generated: string;
 
     if (questionCount >= 5) {
-      // 最終メッセージ生成（コメント＋終了メッセージ）
-      const summaryPrompt = `以下は候補者の最終回答です。
-
-${messages[messages.length - 1].content}
-
-この内容に対する簡単な共感コメントを述べた上で、「以上で質問は終了です。お疲れ様でした。」というメッセージを続けてください。
-- 出力は150文字以内。
-- 丁寧かつ温かい表現でお願いします。
-- ラベルや記号は使わず、自然な文章にしてください。`;
+      const lastAnswer = messages[messages.length - 1]?.content ?? '';
+      const summaryPrompt = `以下は候補者の最終回答です。\n\n${lastAnswer}\n\nこの内容に対する簡単な共感コメントを述べた上で、「以上で質問は終了です。お疲れ様でした。」というメッセージを続けてください。\n- 出力は150文字以内。\n- 丁寧かつ温かい表現でお願いします。\n- ラベルや記号は使わず、自然な文章にしてください。`;
 
       const summaryMessages = [
         { role: 'system', content: summaryPrompt }
@@ -60,7 +52,7 @@ ${messages[messages.length - 1].content}
 
       const response = await openai.chat.completions.create({
         model: MODEL_NAME,
-        messages: summaryMessages,
+        messages: summaryMessages as any, // 型エラー回避（もしくは適切にキャスト）
         temperature: 0.7,
       });
 
