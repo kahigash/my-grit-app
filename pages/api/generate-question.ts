@@ -7,6 +7,7 @@ const openai = new OpenAI({
 
 const MODEL_NAME = process.env.MODEL_NAME ?? 'gpt-4o';
 const MAX_QUESTIONS = 5;
+const FIXED_Q1 = 'これまでに、どうしてもやり遂げたいと思って粘り強く取り組んだ長期的な目標やプロジェクトがあれば教えてください。その際に直面した最も大きな困難と、それをどう乗り越えたかを詳しく聞かせてください。';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -17,6 +18,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid request format' });
+  }
+
+  // Q1として固定文を返す
+  const questionCount = messages.filter((m: any) => m.role === 'assistant').length;
+
+  if (questionCount === 0) {
+    return res.status(200).json({ result: FIXED_Q1 });
+  }
+
+  // Q5まで質問済みならクロージング
+  if (questionCount >= MAX_QUESTIONS) {
+    const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || '';
+    const closingResponse = `共感します。${lastUserMessage.slice(0, 50)}... のような経験は貴重ですね。以上で質問は終了です。お疲れ様でした。`;
+    return res.status(200).json({ result: closingResponse });
   }
 
   const systemPrompt = `
@@ -39,15 +54,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ];
 
   try {
-    // 質問数をカウント
-    const questionCount = messages.filter((m: any) => m.role === 'assistant').length;
-
-    if (questionCount >= MAX_QUESTIONS) {
-      const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || '';
-      const closingResponse = `共感します。${lastUserMessage.slice(0, 50)}... のような経験は貴重ですね。以上で質問は終了です。お疲れ様でした。`;
-      return res.status(200).json({ result: closingResponse });
-    }
-
     const response = await openai.chat.completions.create({
       model: MODEL_NAME,
       messages: fullMessages,
