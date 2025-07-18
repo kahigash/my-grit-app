@@ -11,6 +11,7 @@ type Role = 'user' | 'assistant';
 interface Message {
   role: Role;
   content: string;
+  isRetryPrompt?: boolean;
 }
 
 interface GritScore {
@@ -80,7 +81,7 @@ export default function Home() {
     setError('');
 
     try {
-      const lastQuestion = messages.filter((m) => m.role === 'assistant').slice(-1)[0]?.content || '';
+      const lastQuestion = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).slice(-1)[0]?.content || '';
       const validation = await axios.post('/api/validate-answer', {
         question: lastQuestion,
         answer: input,
@@ -89,7 +90,8 @@ export default function Home() {
       if (!validation.data.valid && validation.data.needsRetry) {
         setMessages([...updatedMessages, {
           role: 'assistant',
-          content: 'もう一度、しっかり答えていただけますか？'
+          content: 'もう一度、しっかり答えていただけますか？',
+          isRetryPrompt: true
         }]);
         setIsRetry(true);
         return;
@@ -120,7 +122,7 @@ export default function Home() {
     }
   };
 
-  const assistantCount = messages.filter((m) => m.role === 'assistant').length;
+  const assistantCount = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).length;
   const userCount = messages.filter((m) => m.role === 'user').length;
   const showInput = assistantCount < 6 && assistantCount > userCount;
 
@@ -136,10 +138,10 @@ export default function Home() {
           {messages.map((msg, idx) => {
             const isQ = msg.role === 'assistant';
             const isClosing = isQ && msg.content.includes('以上で質問は終了');
-            const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.content.includes('以上で質問は終了')).length;
+            const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.content.includes('以上で質問は終了') && !m.isRetryPrompt).length;
             return (
               <div key={idx} style={{ marginBottom: '1rem' }}>
-                <strong>{isQ && !isClosing ? `Q: 質問 ${qNum + 1} / 5` : !isQ ? 'A:' : ''}</strong>{' '}
+                <strong>{isQ && !isClosing && !msg.isRetryPrompt ? `Q: 質問 ${qNum + 1} / 5` : !isQ ? 'A:' : ''}</strong>{' '}
                 {msg.content}
               </div>
             );
