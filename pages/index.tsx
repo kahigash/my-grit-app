@@ -127,11 +127,13 @@ export default function Home() {
     .filter((m) => m.role === 'assistant' && !m.isRetryPrompt)
     .pop()?.index;
 
-  const hasUserAnswerToLastQuestion = lastRealQuestionIndex != null &&
-    messages.slice(lastRealQuestionIndex + 1).some((m) => m.role === 'user');
-
-  const showInput = lastRealQuestionIndex != null &&
-    (!hasUserAnswerToLastQuestion && messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).length < 6);
+  const showInput = (() => {
+    if (lastRealQuestionIndex == null) return false;
+    const sliced = messages.slice(lastRealQuestionIndex + 1);
+    const userMessages = sliced.filter((m) => m.role === 'user');
+    const assistantMessages = sliced.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
+    return userMessages.length <= assistantMessages.length;
+  })();
 
   return (
     <>
