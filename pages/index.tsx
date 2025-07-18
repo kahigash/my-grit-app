@@ -47,6 +47,7 @@ export default function Home() {
   });
   const [scoreHistory, setScoreHistory] = useState<ScoreChange[]>([]);
   const [isRetry, setIsRetry] = useState(false);
+  const [retryState, setRetryState] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -93,21 +94,21 @@ export default function Home() {
           content: 'もう一度、しっかり答えていただけますか？',
           isRetryPrompt: true
         }]);
-        setIsRetry(true);
+        setRetryState(true);
         setLoading(false);
         return;
       }
 
       const newMessages = [...updatedMessages];
-      const validQuestions = newMessages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-      const validAnswers = newMessages.filter((m, i) => {
+      const realQuestions = newMessages.filter(m => m.role === 'assistant' && !m.isRetryPrompt);
+      const realAnswers = newMessages.filter((m, i) => {
         if (m.role !== 'user') return false;
-        if (newMessages[i - 1]?.isRetryPrompt) return false;
-        if (newMessages[i - 2]?.isRetryPrompt) return false;
-        return true;
+        const prev = newMessages[i - 1];
+        const prev2 = newMessages[i - 2];
+        return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
       });
 
-      if (validQuestions.length >= 5 && validAnswers.length >= 5) {
+      if (realQuestions.length >= 5 && realAnswers.length >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
         setMessages([...newMessages, { role: 'assistant', content: closingMessage }]);
         setLoading(false);
@@ -118,7 +119,7 @@ export default function Home() {
       const assistantMessage: Message = { role: 'assistant', content: res.data.result };
       const withNewQ = [...newMessages, assistantMessage];
       setMessages(withNewQ);
-      setIsRetry(false);
+      setRetryState(false);
 
       const scoreRes = await axios.post('/api/evaluate-grit', { messages: withNewQ });
       const newScore: GritScore = scoreRes.data.score;
@@ -143,9 +144,9 @@ export default function Home() {
     const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
     const realAnswers = messages.filter((m, i) => {
       if (m.role !== 'user') return false;
-      if (messages[i - 1]?.isRetryPrompt) return false;
-      if (messages[i - 2]?.isRetryPrompt) return false;
-      return true;
+      const prev = messages[i - 1];
+      const prev2 = messages[i - 2];
+      return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
     });
     if (realQuestions.length >= 5 && realAnswers.length >= 5) return false;
     const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
