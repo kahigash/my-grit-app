@@ -38,25 +38,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ];
 
   try {
-    const questionCount = messages.filter((msg: any) => msg.role === 'user' && msg.content?.includes('回答:')).length;
+    // userによる回答回数をカウント（"user" で "回答" を含む場合）
+    const answerCount = messages.filter(
+      (msg: any) => msg.role === 'user' && typeof msg.content === 'string' && msg.content.trim() !== ''
+    ).length;
 
-    let generated: string;
+    let rawOutput: string;
 
-    if (questionCount >= 5) {
+    if (answerCount >= 5) {
       const lastAnswer = messages[messages.length - 1]?.content ?? '';
-      const summaryPrompt = `以下は候補者の最終回答です。\n\n${lastAnswer}\n\nこの内容に対する簡単な共感コメントを述べた上で、「以上で質問は終了です。お疲れ様でした。」というメッセージを続けてください。\n- 出力は150文字以内。\n- 丁寧かつ温かい表現でお願いします。\n- ラベルや記号は使わず、自然な文章にしてください。`;
+      const summaryPrompt = `
+以下は候補者の最終回答です。
 
-      const summaryMessages = [
-        { role: 'system', content: summaryPrompt }
-      ];
+${lastAnswer}
+
+この内容に対する簡単な共感コメントを述べた上で、「以上で質問は終了です。お疲れ様でした。」というメッセージを続けてください。
+- 出力は150文字以内。
+- 丁寧かつ温かい表現でお願いします。
+- ラベルや記号は使わず、自然な文章にしてください。
+`;
 
       const response = await openai.chat.completions.create({
         model: MODEL_NAME,
-        messages: summaryMessages as any, // 型エラー回避（もしくは適切にキャスト）
+        messages: [
+          { role: 'system', content: summaryPrompt }
+        ],
         temperature: 0.7,
       });
 
-      generated = response.choices?.[0]?.message?.content?.trim() || '';
+      rawOutput = response.choices?.[0]?.message?.content?.trim() || '';
     } else {
       const response = await openai.chat.completions.create({
         model: MODEL_NAME,
@@ -64,14 +74,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         temperature: 0.7,
       });
 
-      generated = response.choices?.[0]?.message?.content?.trim() || '';
+      rawOutput = response.choices?.[0]?.message?.content?.trim() || '';
     }
 
-    if (!generated) {
+    // 出力から「Q1:」「Q:」「A:」を削除（念のため）
+    const cleanedOutput = rawOutput.replace(/^Q\d*[:：]\s*/i, '').replace(/^A[:：]\s*/i, '');
+
+    if (!cleanedOutput) {
       return res.status(500).json({ error: 'No content generated' });
     }
 
-    res.status(200).json({ result: generated });
+    res.status(200).json({ result: cleanedOutput });
   } catch (error: any) {
     console.error('OpenAI Error:', error?.response?.data || error.message);
     res.status(500).json({ error: 'Failed to generate question' });
