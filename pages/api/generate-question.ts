@@ -6,6 +6,7 @@ const openai = new OpenAI({
 });
 
 const MODEL_NAME = process.env.MODEL_NAME ?? 'gpt-4o';
+const MAX_QUESTIONS = 5;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -17,6 +18,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid request format' });
   }
+
+  const userAnswers = messages.filter((m: any) => m.role === 'user');
+  const isLastQuestion = userAnswers.length >= MAX_QUESTIONS;
 
   const systemPrompt = `
 あなたは企業の採用面接におけるインタビュアーです。候補者の「GRIT（やり抜く力）」を測定するため、以下の方針で質問を作成してください。
@@ -38,53 +42,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   ];
 
   try {
-    // userによる回答回数をカウント（"user" で "回答" を含む場合）
-    const answerCount = messages.filter(
-      (msg: any) => msg.role === 'user' && typeof msg.content === 'string' && msg.content.trim() !== ''
-    ).length;
-
-    let rawOutput: string;
-
-    if (answerCount >= 5) {
-      const lastAnswer = messages[messages.length - 1]?.content ?? '';
+    if (isLastQuestion) {
+      const lastUserAnswer = userAnswers[userAnswers.length - 1]?.content || '';
       const summaryPrompt = `
-以下は候補者の最終回答です。
+以下の候補者の回答に対し、簡単な共感コメントを添えて締めのメッセージを作成してください。最後に「以上で質問は終了です。お疲れ様でした。」と付け加えてください。
 
-${lastAnswer}
+【回答】
+${lastUserAnswer}
 
-この内容に対する簡単な共感コメントを述べた上で、「以上で質問は終了です。お疲れ様でした。」というメッセージを続けてください。
-- 出力は150文字以内。
-- 丁寧かつ温かい表現でお願いします。
-- ラベルや記号は使わず、自然な文章にしてください。
+【出力制約】
+- 120文字以内で簡潔にまとめてください。
+- 「Q:」「A:」などのラベルは含めないでください。
 `;
 
+      const summaryMessages = [
+        { role: 'system', content: summaryPrompt },
+      ];
+
       const response = await openai.chat.completions.create({
         model: MODEL_NAME,
-        messages: [
-          { role: 'system', content: summaryPrompt }
-        ],
+        messages: summaryMessages as any,
         temperature: 0.7,
       });
 
-      rawOutput = response.choices?.[0]?.message?.content?.trim() || '';
-    } else {
-      const response = await openai.chat.completions.create({
-        model: MODEL_NAME,
-        messages: fullMessages,
-        temperature: 0.7,
-      });
-
-      rawOutput = response.choices?.[0]?.message?.content?.trim() || '';
+      const result = response.choices?.[0]?.message?.content?.trim() || '';
+      return res.status(200).json({ result });
     }
 
-    // 出力から「Q1:」「Q:」「A:」を削除（念のため）
-    const cleanedOutput = rawOutput.replace(/^Q\d*[:：]\s*/i, '').replace(/^A[:：]\s*/i, '');
+    const response = await openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: fullMessages as any,
+      temperature: 0.7,
+    });
 
-    if (!cleanedOutput) {
+    const generated = response.choices?.[0]?.message?.content?.trim() || '';
+    if (!generated) {
       return res.status(500).json({ error: 'No content generated' });
     }
 
-    res.status(200).json({ result: cleanedOutput });
+    res.status(200).json({ result: generated });
   } catch (error: any) {
     console.error('OpenAI Error:', error?.response?.data || error.message);
     res.status(500).json({ error: 'Failed to generate question' });
