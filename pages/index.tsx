@@ -77,14 +77,12 @@ export default function Home() {
   };
 
   const countRealAnswers = (messages: Message[]): number => {
-    const realAnswers: Message[] = [];
-    for (let i = 0; i < messages.length; i++) {
-      if (messages[i].role !== 'user') continue;
-      if (isValidAnswer(messages, i)) {
-        realAnswers.push(messages[i]);
+    return messages.reduce((count, m, i) => {
+      if (m.role === 'user' && isValidAnswer(messages, i)) {
+        return count + 1;
       }
-    }
-    return realAnswers.length;
+      return count;
+    }, 0);
   };
 
   const handleSubmit = async () => {
@@ -135,11 +133,19 @@ export default function Home() {
       const scoreRes = await axios.post('/api/evaluate-grit', { messages: withNewQ });
       const newScore: GritScore = scoreRes.data.score;
       const newFactors: string[] = scoreRes.data.relatedFactors || [];
+
+      const previousScore = scoreHistory.reduce((acc, entry) => {
+        for (const key of Object.keys(acc) as (keyof GritScore)[]) {
+          acc[key] += entry.delta[key] || 0;
+        }
+        return acc;
+      }, { perseverance: 0, passion: 0, goal_orientation: 0, resilience: 0 });
+
       const delta: Partial<GritScore> = {
-        perseverance: newScore.perseverance - gritScore.perseverance,
-        passion: newScore.passion - gritScore.passion,
-        goal_orientation: newScore.goal_orientation - gritScore.goal_orientation,
-        resilience: newScore.resilience - gritScore.resilience,
+        perseverance: newScore.perseverance - previousScore.perseverance,
+        passion: newScore.passion - previousScore.passion,
+        goal_orientation: newScore.goal_orientation - previousScore.goal_orientation,
+        resilience: newScore.resilience - previousScore.resilience,
       };
 
       setGritScore(newScore);
