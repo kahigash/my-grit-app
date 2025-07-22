@@ -1,23 +1,24 @@
-import { useEffect, useState } from 'react';
+""import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
-type Message = {
+// 型定義
+interface Message {
   role: 'user' | 'assistant';
   content: string;
-};
+}
 
-type Score = {
+interface Score {
   perseverance: number;
   passion: number;
   goal_orientation: number;
   resilience: number;
-};
+}
 
-type ScoreLog = {
+interface ScoreLog {
   answer: string;
   relatedFactors: string[];
   score: Score;
-};
+}
 
 const MAX_QUESTIONS = 5;
 
@@ -33,8 +34,8 @@ export default function Home() {
   });
   const [scoreLogs, setScoreLogs] = useState<ScoreLog[]>([]);
   const [showInput, setShowInput] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // 初回質問（固定）
   useEffect(() => {
     if (messages.length === 0) {
       setMessages([
@@ -47,6 +48,10 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -55,7 +60,6 @@ export default function Home() {
     setMessages(newMessages);
     setInput('');
 
-    // OpenAI質問生成
     const questionRes = await axios.post('/api/generate-question', {
       messages: newMessages,
       questionCount: currentQuestion,
@@ -67,7 +71,6 @@ export default function Home() {
     };
     setMessages((prev) => [...prev, assistantMessage]);
 
-    // GRITスコア評価
     const scoreRes = await axios.post('/api/evaluate-grit', {
       messages: newMessages,
     });
@@ -75,7 +78,6 @@ export default function Home() {
     const thisScore = scoreRes.data.score as Score;
     const relatedFactors = scoreRes.data.relatedFactors as string[];
 
-    // スコア加算（絶対スコア）
     setScore((prev) => ({
       perseverance: prev.perseverance + thisScore.perseverance,
       passion: prev.passion + thisScore.passion,
@@ -83,7 +85,6 @@ export default function Home() {
       resilience: prev.resilience + thisScore.resilience,
     }));
 
-    // スコアログ追加
     setScoreLogs((prev) => [
       ...prev,
       {
@@ -93,18 +94,15 @@ export default function Home() {
       },
     ]);
 
-    // 質問数更新
     const nextQuestion = currentQuestion + 1;
     setCurrentQuestion(nextQuestion);
 
     if (nextQuestion > MAX_QUESTIONS) {
-      // 終了メッセージ
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content:
-            'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。',
+          content: 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。',
         },
       ]);
       setShowInput(false);
@@ -112,7 +110,7 @@ export default function Home() {
   };
 
   const formatAverage = (value: number) =>
-    (value / scoreLogs.length).toFixed(1);
+    scoreLogs.length === 0 ? '0.0' : (value / scoreLogs.length).toFixed(1);
 
   return (
     <div style={{ display: 'flex', padding: 20 }}>
@@ -127,10 +125,21 @@ export default function Home() {
                 marginBottom: 10,
               }}
             >
-              <strong>{msg.role === 'user' ? 'あなた' : 'システム'}:</strong>{' '}
-              {msg.content}
+              <div
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: msg.role === 'user' ? '#dcf8c6' : '#f1f0f0',
+                  borderRadius: 10,
+                  padding: '8px 12px',
+                  maxWidth: '80%',
+                }}
+              >
+                <strong>{msg.role === 'user' ? 'あなた' : 'システム'}:</strong>{' '}
+                {msg.content}
+              </div>
             </div>
           ))}
+          <div ref={bottomRef} />
         </div>
         {showInput && (
           <div style={{ marginTop: 10 }}>
@@ -139,6 +148,7 @@ export default function Home() {
               onChange={(e) => setInput(e.target.value)}
               rows={3}
               style={{ width: '100%' }}
+              placeholder="ここに回答を入力してください"
             />
             <button onClick={handleSend} style={{ marginTop: 5 }}>
               送信
