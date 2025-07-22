@@ -22,7 +22,7 @@ interface GritScore {
 }
 
 interface ScoreChange {
-  delta: Partial<GritScore>;
+  score: GritScore;
   relatedFactors: string[];
   userAnswer: string;
 }
@@ -39,12 +39,6 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [gritScore, setGritScore] = useState<GritScore>({
-    perseverance: 0,
-    passion: 0,
-    goal_orientation: 0,
-    resilience: 0,
-  });
   const [scoreHistory, setScoreHistory] = useState<ScoreChange[]>([]);
   const [retryState, setRetryState] = useState(false);
 
@@ -85,6 +79,28 @@ export default function Home() {
     }, 0);
   };
 
+  const calculateAverageScore = (history: ScoreChange[]): GritScore => {
+    const total = history.reduce(
+      (acc, item) => {
+        acc.perseverance += item.score.perseverance;
+        acc.passion += item.score.passion;
+        acc.goal_orientation += item.score.goal_orientation;
+        acc.resilience += item.score.resilience;
+        return acc;
+      },
+      { perseverance: 0, passion: 0, goal_orientation: 0, resilience: 0 }
+    );
+
+    const count = history.length || 1;
+
+    return {
+      perseverance: Math.round(total.perseverance / count),
+      passion: Math.round(total.passion / count),
+      goal_orientation: Math.round(total.goal_orientation / count),
+      resilience: Math.round(total.resilience / count),
+    };
+  };
+
   const handleSubmit = async () => {
     if (!input.trim()) return;
 
@@ -121,14 +137,12 @@ export default function Home() {
       });
       const newScore: GritScore = scoreRes.data.score;
       const newFactors: string[] = scoreRes.data.relatedFactors || [];
-      const delta: Partial<GritScore> = {
-        perseverance: newScore.perseverance - gritScore.perseverance,
-        passion: newScore.passion - gritScore.passion,
-        goal_orientation: newScore.goal_orientation - gritScore.goal_orientation,
-        resilience: newScore.resilience - gritScore.resilience,
-      };
-      setGritScore(newScore);
-      setScoreHistory([...scoreHistory, { delta, relatedFactors: newFactors, userAnswer: input }]);
+
+      setScoreHistory(prev => [...prev, {
+        score: newScore,
+        relatedFactors: newFactors,
+        userAnswer: input
+      }]);
 
       if (realAnswersCount >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
@@ -164,6 +178,8 @@ export default function Home() {
     const hasRetryPrompt = afterLastQ.some((m) => m.role === 'assistant' && m.isRetryPrompt);
     return !hasAnswer || hasRetryPrompt;
   })();
+
+  const currentScore = calculateAverageScore(scoreHistory);
 
   return (
     <>
@@ -204,8 +220,8 @@ export default function Home() {
         <div style={{ flex: 1, backgroundColor: '#f9f9f9', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
           <strong>現在のGRITスコア</strong>
           <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
-            {(Object.keys(gritScore) as (keyof GritScore)[]).map((key) => (
-              <li key={key}>{labelMap[key]}: {gritScore[key]} / 5</li>
+            {(Object.keys(currentScore) as (keyof GritScore)[]).map((key) => (
+              <li key={key}>{labelMap[key]}: {currentScore[key]} / 5</li>
             ))}
           </ul>
           <hr style={{ margin: '1rem 0' }} />
@@ -215,11 +231,10 @@ export default function Home() {
               <li key={idx} style={{ marginBottom: '0.5rem' }}>
                 <div>回答 {idx + 1}: 「{entry.userAnswer.slice(0, 20)}...」</div>
                 <div>影響要素: {entry.relatedFactors.length > 0 ? entry.relatedFactors.map(f => labelMap[f as keyof GritScore]).join(', ') : 'なし'}</div>
-                <div>Δ: {
-                  Object.entries(entry.delta)
-                    .filter(([, val]) => val !== 0)
-                    .map(([key, val]) => `${labelMap[key as keyof GritScore]}: ${val! > 0 ? '+' : ''}${val}`)
-                    .join(', ') || '変化なし'
+                <div>絶対評価: {
+                  Object.entries(entry.score)
+                    .map(([key, val]) => `${labelMap[key as keyof GritScore]}: ${val}`)
+                    .join(', ')
                 }</div>
               </li>
             ))}
