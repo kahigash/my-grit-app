@@ -1,4 +1,4 @@
-"import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 
 // 型定義
