@@ -12,15 +12,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const lastAnswer = userAnswers[userAnswers.length - 1];
 
   const prompt = `
-あなたは非認知能力（GRIT）を評価するAIです。
-以下のユーザーの回答を読み、GRITの4つの構成要素（perseverance: 粘り強さ, passion: 情熱, goal_orientation: 目標志向性, resilience: 回復力）にどの程度関連するかを**絶対評価**でスコアリングしてください。
+あなたはGRIT（非認知能力）の評価者です。
+以下の「ユーザーの回答」について、次の4つの構成要素に対する関連度を**絶対評価**してください：
 
-- スコアは各要素 0〜5 の範囲で数値で評価してください。
-- 前回までのスコアや他の回答との相対比較ではなく、**この回答単体に対する加点のみ**を出力してください。
-- 減点（マイナススコア）は絶対に行わず、0を最低点として評価してください。
-- 回答のどの部分がどの要素に関連しているかを推定し、その要素の英語名を "relatedFactors" にリストとして出力してください。
+- perseverance（粘り強さ）
+- passion（情熱）
+- goal_orientation（目標志向性）
+- resilience（回復力）
 
-出力形式は以下に厳密に従ってください（先頭に何もつけずに純粋なJSON）：
+以下のルールに従ってスコアをつけてください：
+
+- 各スコアは0〜5の整数。
+- スコアはこの回答単体から判断し、**過去の回答との比較や合計スコアは一切考慮しない**。
+- 減点は絶対に行わず、**0点を下回ることは不可。**
+- スコアが0でない場合、その要素を "relatedFactors" に含めてください。
+- 出力は次のJSON形式に厳密に従ってください（先頭に何もつけないで）：
 
 {
   "score": {
@@ -29,12 +35,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     "goal_orientation": 数値（0〜5）,
     "resilience": 数値（0〜5）
   },
-  "relatedFactors": ["perseverance", "passion", ...]
+  "relatedFactors": ["perseverance", "goal_orientation", ...]
 }
 
 ユーザーの回答:
 ${lastAnswer}
-  `;
+`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -44,7 +50,6 @@ ${lastAnswer}
     });
 
     const raw = completion.choices[0].message.content || '';
-
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
       throw new Error('JSON形式の出力が見つかりませんでした');
