@@ -77,8 +77,8 @@ export default function Home() {
   };
 
   const countRealAnswers = (messages: Message[]): number => {
-    return messages.reduce((count, m, i) => {
-      if (m.role === 'user' && isValidAnswer(messages, i)) {
+    return messages.reduce((count, msg, i) => {
+      if (msg.role === 'user' && isValidAnswer(messages, i)) {
         return count + 1;
       }
       return count;
@@ -103,53 +103,49 @@ export default function Home() {
       });
 
       if (!validation.data.valid && validation.data.needsRetry) {
-        setMessages([...updatedMessages, {
+        const retryPrompt: Message = {
           role: 'assistant',
           content: 'もう一度、しっかり答えていただけますか？',
           isRetryPrompt: true
-        }]);
+        };
+        setMessages([...updatedMessages, retryPrompt]);
         setRetryState(true);
         setLoading(false);
         return;
       }
 
-      const newMessages = [...updatedMessages];
-      const realQuestions = newMessages.filter(m => m.role === 'assistant' && !m.isRetryPrompt);
-      const realAnswersCount = countRealAnswers(newMessages);
+      const realAnswersCount = countRealAnswers(updatedMessages);
 
-      if (realQuestions.length >= 5 && realAnswersCount >= 5) {
+      const scoreRes = await axios.post('/api/evaluate-grit', {
+        messages: updatedMessages
+      });
+      const newScore: GritScore = scoreRes.data.score;
+      const newFactors: string[] = scoreRes.data.relatedFactors || [];
+      const delta: Partial<GritScore> = {
+        perseverance: newScore.perseverance - gritScore.perseverance,
+        passion: newScore.passion - gritScore.passion,
+        goal_orientation: newScore.goal_orientation - gritScore.goal_orientation,
+        resilience: newScore.resilience - gritScore.resilience,
+      };
+      setGritScore(newScore);
+      setScoreHistory([...scoreHistory, { delta, relatedFactors: newFactors, userAnswer: input }]);
+
+      if (realAnswersCount >= 5) {
         const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
-        setMessages([...newMessages, { role: 'assistant', content: closingMessage }]);
+        setMessages([...updatedMessages, { role: 'assistant', content: closingMessage }]);
         setLoading(false);
         return;
       }
 
-      const res = await axios.post('/api/generate-question', { messages: newMessages });
-      const assistantMessage: Message = { role: 'assistant', content: res.data.result };
-      const withNewQ = [...newMessages, assistantMessage];
-      setMessages(withNewQ);
-      setRetryState(false);
-
-      const scoreRes = await axios.post('/api/evaluate-grit', { messages: withNewQ });
-      const newScore: GritScore = scoreRes.data.score;
-      const newFactors: string[] = scoreRes.data.relatedFactors || [];
-
-      const previousScore = scoreHistory.reduce((acc, entry) => {
-        for (const key of Object.keys(acc) as (keyof GritScore)[]) {
-          acc[key] += entry.delta[key] || 0;
-        }
-        return acc;
-      }, { perseverance: 0, passion: 0, goal_orientation: 0, resilience: 0 });
-
-      const delta: Partial<GritScore> = {
-        perseverance: newScore.perseverance - previousScore.perseverance,
-        passion: newScore.passion - previousScore.passion,
-        goal_orientation: newScore.goal_orientation - previousScore.goal_orientation,
-        resilience: newScore.resilience - previousScore.resilience,
+      const nextQuestionRes = await axios.post('/api/generate-question', {
+        messages: updatedMessages
+      });
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: nextQuestionRes.data.result,
       };
-
-      setGritScore(newScore);
-      setScoreHistory([...scoreHistory, { delta, relatedFactors: newFactors, userAnswer: input }]);
+      setMessages([...updatedMessages, assistantMessage]);
+      setRetryState(false);
     } catch (err) {
       setError('エラーが発生しました。');
     } finally {
