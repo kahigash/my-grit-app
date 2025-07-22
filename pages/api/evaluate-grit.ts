@@ -1,68 +1,66 @@
-// /pages/api/evaluate-grit.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { OpenAI } from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
-const MODEL_NAME = process.env.MODEL_NAME ?? 'gpt-4o';
+const initialScore = {
+  perseverance: 0,
+  passion: 0,
+  goal_orientation: 0,
+  resilience: 0,
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   const { messages } = req.body;
 
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'Invalid request format' });
-  }
-
-  const userAnswers = messages
-    .filter((m: any) => m.role === 'user')
-    .map((m: any) => m.content)
-    .join('\n---\n');
+  const userAnswers = messages.filter((m: any) => m.role === 'user').map((m: any) => m.content);
+  const lastAnswer = userAnswers[userAnswers.length - 1];
 
   const prompt = `
-以下の面接回答を読んで、各回答から見られるGRITの構成要素を総合的に評価してください。
+以下のユーザーの回答を読み、GRITの4つの構成要素（perseverance, passion, goal_orientation, resilience）にどの程度関連するかを分析してください。
+関連する要素と、その理由を日本語で簡潔に述べてください。出力は以下の形式で出してください。
 
-【評価項目】
-- 粘り強さ（perseverance）
-- 情熱（passion）
-- 目標志向性（goal_orientation）
-- 回復力（resilience）
-
-以下のJSON形式で、スコア（0～5）と影響した要素の配列を返してください。
 {
   "score": {
-    "perseverance": 数値,
-    "passion": 数値,
-    "goal_orientation": 数値,
-    "resilience": 数値
+    "perseverance": 数値（0〜5）,
+    "passion": 数値（0〜5）,
+    "goal_orientation": 数値（0〜5）,
+    "resilience": 数値（0〜5）
   },
-  "relatedFactors": ["perseverance", "passion"]
+  "relatedFactors": ["関連する要素の英語名"]
 }
 
-該当しない場合は0、relatedFactorsがなければ空配列にしてください。
-
-回答全文：
-${userAnswers}
+ユーザーの回答:
+${lastAnswer}
 `;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: MODEL_NAME,
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
+      temperature: 0.2,
     });
 
-    const text = response.choices[0]?.message?.content?.trim() || '{}';
-    const json = JSON.parse(text);
+    const raw = completion.choices[0].message.content || '';
 
-    res.status(200).json(json);
-  } catch (err: any) {
-    console.error('GRITスコア評価エラー:', err?.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to evaluate GRIT scores' });
+    // JSONパース処理
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) {
+      throw new Error('JSON形式の出力が見つかりませんでした');
+    }
+
+    const parsed = JSON.parse(match[0]);
+
+    // クライアント側に過去スコアが保持されている前提
+    // そのため delta 計算は index.tsx 側で行います
+    res.status(200).json({
+      score: parsed.score,
+      relatedFactors: parsed.relatedFactors,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'GRIT評価に失敗しました' });
   }
 }
