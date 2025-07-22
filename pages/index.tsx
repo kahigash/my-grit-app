@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 // 型定義
@@ -34,8 +34,8 @@ export default function Home() {
   });
   const [scoreLogs, setScoreLogs] = useState<ScoreLog[]>([]);
   const [showInput, setShowInput] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
+  // 初回質問（固定）
   useEffect(() => {
     if (messages.length === 0) {
       setMessages([
@@ -48,10 +48,6 @@ export default function Home() {
     }
   }, []);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -60,24 +56,14 @@ export default function Home() {
     setMessages(newMessages);
     setInput('');
 
-    const questionRes = await axios.post('/api/generate-question', {
-      messages: newMessages,
-      questionCount: currentQuestion,
-    });
-
-    const assistantMessage: Message = {
-      role: 'assistant',
-      content: questionRes.data.message,
-    };
-    setMessages((prev) => [...prev, assistantMessage]);
-
+    // スコア評価
     const scoreRes = await axios.post('/api/evaluate-grit', {
       messages: newMessages,
     });
+    const thisScore: Score = scoreRes.data.score;
+    const relatedFactors: string[] = scoreRes.data.relatedFactors;
 
-    const thisScore = scoreRes.data.score as Score;
-    const relatedFactors = scoreRes.data.relatedFactors as string[];
-
+    // スコア更新
     setScore((prev) => ({
       perseverance: prev.perseverance + thisScore.perseverance,
       passion: prev.passion + thisScore.passion,
@@ -85,6 +71,7 @@ export default function Home() {
       resilience: prev.resilience + thisScore.resilience,
     }));
 
+    // スコアログ追加
     setScoreLogs((prev) => [
       ...prev,
       {
@@ -94,52 +81,47 @@ export default function Home() {
       },
     ]);
 
+    // 次の質問取得
     const nextQuestion = currentQuestion + 1;
     setCurrentQuestion(nextQuestion);
 
     if (nextQuestion > MAX_QUESTIONS) {
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。',
-        },
+        { role: 'assistant', content: 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。' },
       ]);
       setShowInput(false);
+    } else {
+      const questionRes = await axios.post('/api/generate-question', {
+        messages: [...newMessages],
+        questionCount: nextQuestion,
+      });
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: questionRes.data.message },
+      ]);
     }
   };
 
   const formatAverage = (value: number) =>
-    scoreLogs.length === 0 ? '0.0' : (value / scoreLogs.length).toFixed(1);
+    scoreLogs.length ? (value / scoreLogs.length).toFixed(1) : '0.0';
 
   return (
     <div style={{ display: 'flex', padding: 20 }}>
       <div style={{ flex: 2, marginRight: 20 }}>
         <h2>GRIT測定インタビュー</h2>
         <div style={{ border: '1px solid #ccc', padding: 10, minHeight: 300 }}>
-          {messages.map((msg, i) => (
+          {messages.map((msg, idx) => (
             <div
-              key={i}
+              key={idx}
               style={{
                 textAlign: msg.role === 'user' ? 'right' : 'left',
                 marginBottom: 10,
               }}
             >
-              <div
-                style={{
-                  display: 'inline-block',
-                  backgroundColor: msg.role === 'user' ? '#dcf8c6' : '#f1f0f0',
-                  borderRadius: 10,
-                  padding: '8px 12px',
-                  maxWidth: '80%',
-                }}
-              >
-                <strong>{msg.role === 'user' ? 'あなた' : 'システム'}:</strong>{' '}
-                {msg.content}
-              </div>
+              <strong>{msg.role === 'user' ? 'あなた' : 'システム'}:</strong> {msg.content}
             </div>
           ))}
-          <div ref={bottomRef} />
         </div>
         {showInput && (
           <div style={{ marginTop: 10 }}>
@@ -148,11 +130,8 @@ export default function Home() {
               onChange={(e) => setInput(e.target.value)}
               rows={3}
               style={{ width: '100%' }}
-              placeholder="ここに回答を入力してください"
             />
-            <button onClick={handleSend} style={{ marginTop: 5 }}>
-              送信
-            </button>
+            <button onClick={handleSend} style={{ marginTop: 5 }}>送信</button>
           </div>
         )}
       </div>
@@ -172,16 +151,10 @@ export default function Home() {
             <li key={idx} style={{ marginBottom: 10 }}>
               <div>回答 {idx + 1}: 「{log.answer.slice(0, 30)}...」</div>
               <div>
-                影響要素:{' '}
-                {log.relatedFactors && log.relatedFactors.length > 0
-                  ? log.relatedFactors.join(', ')
-                  : 'なし'}
+                影響要素: {log.relatedFactors.length > 0 ? log.relatedFactors.join(', ') : 'なし'}
               </div>
               <div>
-                Δ: 粘り強さ: {log.score.perseverance}, 情熱:{' '}
-                {log.score.passion}, 目標志向性:{' '}
-                {log.score.goal_orientation}, 回復力:{' '}
-                {log.score.resilience}
+                Δ: 粘り強さ: {log.score.perseverance}, 情熱: {log.score.passion}, 目標志向性: {log.score.goal_orientation}, 回復力: {log.score.resilience}
               </div>
             </li>
           ))}
