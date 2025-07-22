@@ -1,231 +1,182 @@
-'use client';
-
-import { useState, useEffect, useRef } from 'react';
-import Head from 'next/head';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-// 型定義
-
-type Role = 'user' | 'assistant';
-
-interface Message {
-  role: Role;
+type Message = {
+  role: 'user' | 'assistant';
   content: string;
-  isRetryPrompt?: boolean;
-}
+};
 
-interface GritScore {
+type Score = {
   perseverance: number;
   passion: number;
   goal_orientation: number;
   resilience: number;
-}
-
-interface ScoreChange {
-  delta: Partial<GritScore>;
-  relatedFactors: string[];
-  userAnswer: string;
-}
-
-const labelMap: Record<keyof GritScore, string> = {
-  perseverance: '粘り強さ',
-  passion: '情熱',
-  goal_orientation: '目標志向性',
-  resilience: '回復力',
 };
+
+type ScoreLog = {
+  answer: string;
+  relatedFactors: string[];
+  score: Score;
+};
+
+const MAX_QUESTIONS = 5;
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [gritScore, setGritScore] = useState<GritScore>({
+  const [currentQuestion, setCurrentQuestion] = useState(1);
+  const [score, setScore] = useState<Score>({
     perseverance: 0,
     passion: 0,
     goal_orientation: 0,
     resilience: 0,
   });
-  const [scoreHistory, setScoreHistory] = useState<ScoreChange[]>([]);
-  const [retryState, setRetryState] = useState(false);
+  const [scoreLogs, setScoreLogs] = useState<ScoreLog[]>([]);
+  const [showInput, setShowInput] = useState(true);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // 初回質問（固定）
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  useEffect(() => {
-    const loadInitialQuestion = async () => {
-      try {
-        const res = await axios.post('/api/generate-question', { messages: [] });
-        setMessages([{ role: 'assistant', content: res.data.result }]);
-      } catch {
-        setError('初回の質問取得に失敗しました。');
-      }
-    };
-    loadInitialQuestion();
+    if (messages.length === 0) {
+      setMessages([
+        {
+          role: 'assistant',
+          content:
+            '質問 1 / 5 これまでに、どうしてもやり遂げたいと思って粘り強く取り組んだ長期的な目標やプロジェクトがあれば教えてください。その際に直面した最も大きな困難と、それをどう乗り越えたかを詳しく聞かせてください。',
+        },
+      ]);
+    }
   }, []);
 
-  const isValidAnswer = (messages: Message[], index: number): boolean => {
-    const prev = messages[index - 1];
-    const prev2 = messages[index - 2];
-    return !(prev?.isRetryPrompt || prev2?.isRetryPrompt);
-  };
-
-  const countRealAnswers = (messages: Message[]): number => {
-    return messages.reduce((count, msg, i) => {
-      if (msg.role === 'user' && isValidAnswer(messages, i)) {
-        return count + 1;
-      }
-      return count;
-    }, 0);
-  };
-
-  const handleSubmit = async () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
 
     const userMessage: Message = { role: 'user', content: input };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
-    setLoading(true);
-    setError('');
 
-    try {
-      const lastQuestion = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt).slice(-1)[0]?.content || '';
-      const validation = await axios.post('/api/validate-answer', {
-        question: lastQuestion,
+    // OpenAI質問生成
+    const questionRes = await axios.post('/api/generate-question', {
+      messages: newMessages,
+      questionCount: currentQuestion,
+    });
+
+    const assistantMessage: Message = {
+      role: 'assistant',
+      content: questionRes.data.message,
+    };
+    setMessages((prev) => [...prev, assistantMessage]);
+
+    // GRITスコア評価
+    const scoreRes = await axios.post('/api/evaluate-grit', {
+      messages: newMessages,
+    });
+
+    const thisScore = scoreRes.data.score as Score;
+    const relatedFactors = scoreRes.data.relatedFactors as string[];
+
+    // スコア加算（絶対スコア）
+    setScore((prev) => ({
+      perseverance: prev.perseverance + thisScore.perseverance,
+      passion: prev.passion + thisScore.passion,
+      goal_orientation: prev.goal_orientation + thisScore.goal_orientation,
+      resilience: prev.resilience + thisScore.resilience,
+    }));
+
+    // スコアログ追加
+    setScoreLogs((prev) => [
+      ...prev,
+      {
         answer: input,
-      });
+        relatedFactors,
+        score: thisScore,
+      },
+    ]);
 
-      if (!validation.data.valid && validation.data.needsRetry) {
-        const retryPrompt: Message = {
+    // 質問数更新
+    const nextQuestion = currentQuestion + 1;
+    setCurrentQuestion(nextQuestion);
+
+    if (nextQuestion > MAX_QUESTIONS) {
+      // 終了メッセージ
+      setMessages((prev) => [
+        ...prev,
+        {
           role: 'assistant',
-          content: 'もう一度、しっかり答えていただけますか？',
-          isRetryPrompt: true
-        };
-        setMessages([...updatedMessages, retryPrompt]);
-        setRetryState(true);
-        setLoading(false);
-        return;
-      }
-
-      const realAnswersCount = countRealAnswers(updatedMessages);
-
-      const scoreRes = await axios.post('/api/evaluate-grit', {
-        messages: updatedMessages
-      });
-      const newScore: GritScore = scoreRes.data.score;
-      const newFactors: string[] = scoreRes.data.relatedFactors || [];
-      const delta: Partial<GritScore> = {
-        perseverance: newScore.perseverance - gritScore.perseverance,
-        passion: newScore.passion - gritScore.passion,
-        goal_orientation: newScore.goal_orientation - gritScore.goal_orientation,
-        resilience: newScore.resilience - gritScore.resilience,
-      };
-      setGritScore(newScore);
-      setScoreHistory([...scoreHistory, { delta, relatedFactors: newFactors, userAnswer: input }]);
-
-      if (realAnswersCount >= 5) {
-        const closingMessage = 'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。';
-        setMessages([...updatedMessages, { role: 'assistant', content: closingMessage }]);
-        setLoading(false);
-        return;
-      }
-
-      const nextQuestionRes = await axios.post('/api/generate-question', {
-        messages: updatedMessages
-      });
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: nextQuestionRes.data.result,
-      };
-      setMessages([...updatedMessages, assistantMessage]);
-      setRetryState(false);
-    } catch (err) {
-      setError('エラーが発生しました。');
-    } finally {
-      setLoading(false);
+          content:
+            'ご協力ありがとうございました。これでインタビューは終了です。お疲れ様でした。',
+        },
+      ]);
+      setShowInput(false);
     }
   };
 
-  const showInput = (() => {
-    const realQuestions = messages.filter((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    const realAnswersCount = countRealAnswers(messages);
-    if (realQuestions.length >= 5 && realAnswersCount >= 5) return false;
-    const lastQIndex = messages.findLastIndex((m) => m.role === 'assistant' && !m.isRetryPrompt);
-    if (lastQIndex === -1) return true;
-    const afterLastQ = messages.slice(lastQIndex + 1);
-    const hasAnswer = afterLastQ.some((m) => m.role === 'user');
-    const hasRetryPrompt = afterLastQ.some((m) => m.role === 'assistant' && m.isRetryPrompt);
-    return !hasAnswer || hasRetryPrompt;
-  })();
+  const formatAverage = (value: number) =>
+    (value / scoreLogs.length).toFixed(1);
 
   return (
-    <>
-      <Head>
-        <title>{process.env.NEXT_PUBLIC_APP_TITLE || 'GRIT測定アプリ'}</title>
-      </Head>
-
-      <div style={{ display: 'flex', padding: '2rem', gap: '2rem' }}>
-        <div style={{ flex: 2 }}>
-          <h1>GRIT測定インタビュー</h1>
-          {messages.map((msg, idx) => {
-            const isQ = msg.role === 'assistant';
-            const isClosing = isQ && (msg.content.includes('以上で質問は終了') || msg.content.includes('インタビューは終了'));
-            const qNum = messages.slice(0, idx).filter(m => m.role === 'assistant' && !m.isRetryPrompt && !isClosing).length;
-            return (
-              <div key={idx} style={{ marginBottom: '1rem' }}>
-                <strong>{isQ && !isClosing && !msg.isRetryPrompt ? `Q: 質問 ${qNum + 1} / 5` : !isQ ? 'A:' : ''}</strong>{' '}
-                {msg.content}
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
-          {error && <div style={{ color: 'red' }}>{error}</div>}
-          {showInput && (
-            <div>
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="ここに回答を入力してください"
-                rows={3}
-                style={{ width: '100%', marginBottom: '1rem' }}
-              />
-              <button onClick={handleSubmit}>送信</button>
+    <div style={{ display: 'flex', padding: 20 }}>
+      <div style={{ flex: 2, marginRight: 20 }}>
+        <h2>GRIT測定インタビュー</h2>
+        <div style={{ border: '1px solid #ccc', padding: 10, minHeight: 300 }}>
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              style={{
+                textAlign: msg.role === 'user' ? 'right' : 'left',
+                marginBottom: 10,
+              }}
+            >
+              <strong>{msg.role === 'user' ? 'あなた' : 'システム'}:</strong>{' '}
+              {msg.content}
             </div>
-          )}
+          ))}
         </div>
-
-        <div style={{ flex: 1, backgroundColor: '#f9f9f9', padding: '1rem', borderRadius: '8px', fontSize: '0.9rem' }}>
-          <strong>現在のGRITスコア</strong>
-          <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
-            {(Object.keys(gritScore) as (keyof GritScore)[]).map((key) => (
-              <li key={key}>{labelMap[key]}: {gritScore[key]} / 5</li>
-            ))}
-          </ul>
-          <hr style={{ margin: '1rem 0' }} />
-          <strong>スコア変動履歴</strong>
-          <ul style={{ marginTop: '0.5rem', paddingLeft: '1rem' }}>
-            {scoreHistory.map((entry, idx) => (
-              <li key={idx} style={{ marginBottom: '0.5rem' }}>
-                <div>回答 {idx + 1}: 「{entry.userAnswer.slice(0, 20)}...」</div>
-                <div>影響要素: {entry.relatedFactors.length > 0 ? entry.relatedFactors.map(f => labelMap[f as keyof GritScore]).join(', ') : 'なし'}</div>
-                <div>Δ: {
-                  Object.entries(entry.delta)
-                    .filter(([, val]) => val !== 0)
-                    .map(([key, val]) => `${labelMap[key as keyof GritScore]}: ${val! > 0 ? '+' : ''}${val}`)
-                    .join(', ') || '変化なし'
-                }</div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {showInput && (
+          <div style={{ marginTop: 10 }}>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              rows={3}
+              style={{ width: '100%' }}
+            />
+            <button onClick={handleSend} style={{ marginTop: 5 }}>
+              送信
+            </button>
+          </div>
+        )}
       </div>
-    </>
+
+      <div style={{ flex: 1 }}>
+        <h3>現在のGRITスコア（平均）</h3>
+        <ul>
+          <li>粘り強さ: {formatAverage(score.perseverance)} / 5</li>
+          <li>情熱: {formatAverage(score.passion)} / 5</li>
+          <li>目標志向性: {formatAverage(score.goal_orientation)} / 5</li>
+          <li>回復力: {formatAverage(score.resilience)} / 5</li>
+        </ul>
+
+        <h4>スコア変動履歴</h4>
+        <ol>
+          {scoreLogs.map((log, idx) => (
+            <li key={idx} style={{ marginBottom: 10 }}>
+              <div>回答 {idx + 1}: 「{log.answer.slice(0, 30)}...」</div>
+              <div>
+                影響要素:{' '}
+                {log.relatedFactors && log.relatedFactors.length > 0
+                  ? log.relatedFactors.join(', ')
+                  : 'なし'}
+              </div>
+              <div>
+                Δ: 粘り強さ: {log.score.perseverance}, 情熱:{' '}
+                {log.score.passion}, 目標志向性:{' '}
+                {log.score.goal_orientation}, 回復力:{' '}
+                {log.score.resilience}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
   );
 }
