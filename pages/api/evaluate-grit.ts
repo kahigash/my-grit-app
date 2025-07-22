@@ -5,18 +5,15 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const initialScore = {
-  perseverance: 0,
-  passion: 0,
-  goal_orientation: 0,
-  resilience: 0,
-};
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { messages } = req.body;
 
   const userAnswers = messages.filter((m: any) => m.role === 'user').map((m: any) => m.content);
   const lastAnswer = userAnswers[userAnswers.length - 1];
+
+  if (!lastAnswer) {
+    return res.status(400).json({ error: '最新の回答が見つかりませんでした' });
+  }
 
   const prompt = `
 以下のユーザーの回答を読み、GRITの4つの構成要素（perseverance, passion, goal_orientation, resilience）にどの程度関連するかを分析してください。
@@ -44,8 +41,6 @@ ${lastAnswer}
     });
 
     const raw = completion.choices[0].message.content || '';
-
-    // JSONパース処理
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
       throw new Error('JSON形式の出力が見つかりませんでした');
@@ -53,14 +48,24 @@ ${lastAnswer}
 
     const parsed = JSON.parse(match[0]);
 
-    // クライアント側に過去スコアが保持されている前提
-    // そのため delta 計算は index.tsx 側で行います
+    // 念のためバリデーション
+    const score = parsed.score ?? {};
+    const relatedFactors = parsed.relatedFactors ?? [];
+
+    // 数値が0〜5の範囲内であるかチェック
+    for (const key of ['perseverance', 'passion', 'goal_orientation', 'resilience']) {
+      const value = score[key];
+      if (typeof value !== 'number' || value < 0 || value > 5) {
+        throw new Error(`無効なスコア: ${key}=${value}`);
+      }
+    }
+
     res.status(200).json({
-      score: parsed.score,
-      relatedFactors: parsed.relatedFactors,
+      score,
+      relatedFactors,
     });
   } catch (err) {
-    console.error(err);
+    console.error('GRIT評価エラー:', err);
     res.status(500).json({ error: 'GRIT評価に失敗しました' });
   }
 }
